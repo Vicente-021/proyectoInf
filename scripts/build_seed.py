@@ -105,6 +105,33 @@ def main() -> None:
             "price_clp_per_kwh": round(float(daily["H19"]), 12),
         }
 
+    # Cliente A: dato real anonimizado. B y C: cartera sintética derivada de A.
+    a_readings = [
+        {"meter_id": "M-04", "ts": reading["ts"], "kwh": reading["kwh"]}
+        for reading in daily_readings
+    ]
+    synthetic_specs = [
+        ("M-01", 0.65, "2026-05-15"),  # falta una lectura para demostrar el ingreso manual
+        ("M-02", 0.45, None),
+    ]
+    all_daily = list(a_readings)
+    for meter_id, scale, missing_ts in synthetic_specs:
+        for reading in daily_readings:
+            if missing_ts and reading["ts"] == missing_ts:
+                continue
+            all_daily.append(
+                {
+                    "meter_id": meter_id,
+                    "ts": reading["ts"],
+                    "kwh": round(reading["kwh"] * scale, 3),
+                }
+            )
+
+    all_hourly = [
+        {"meter_id": "M-04", "ts": reading["ts"], "cum_kwh": reading["cum_kwh"]}
+        for reading in hourly_readings
+    ]
+
     payload = {
         "meta": {
             "source": SOURCE.name,
@@ -112,10 +139,12 @@ def main() -> None:
             "period": "2026-05",
             "invoice_month": "2026-06",
             "anonymized": True,
+            "synthetic_clients": ["CLI-B", "CLI-C"],
             "notes": (
                 "Lecturas diarias del período 2026-05-01 a 2026-05-30. "
                 "La serie horaria (EESS) cubre 2026-05-30 17:00 a 2026-06-30 23:00. "
-                "El cliente y el contacto fueron anonimizados."
+                "El cliente A y su contacto fueron anonimizados. "
+                "Los clientes B y C son sintéticos y derivan de A para la demostración."
             ),
         },
         "clients": [
@@ -123,15 +152,25 @@ def main() -> None:
                 "id": "CLI-A",
                 "name": "Cliente A",
                 "contact": "contacto@cliente-a.cl",
-            }
+                "synthetic": False,
+            },
+            {
+                "id": "CLI-B",
+                "name": "Cliente B",
+                "contact": "contacto@cliente-b.cl",
+                "synthetic": True,
+            },
+            {
+                "id": "CLI-C",
+                "name": "Cliente C",
+                "contact": "contacto@cliente-c.cl",
+                "synthetic": True,
+            },
         ],
         "meters": [
-            {
-                "id": "M-04",
-                "client_id": "CLI-A",
-                "barge": "Barcaza 2",
-                "source": "eGauge",
-            }
+            {"id": "M-04", "client_id": "CLI-A", "barge": "Barcaza 2", "source": "eGauge"},
+            {"id": "M-01", "client_id": "CLI-B", "barge": "Barcaza 1", "source": "eGauge"},
+            {"id": "M-02", "client_id": "CLI-C", "barge": "Barcaza 1", "source": "eGauge"},
         ],
         "contracts": [
             {
@@ -142,7 +181,25 @@ def main() -> None:
                 "exchange_rate": reference["exchange_rate"],
                 "valid_from": "2026-05-01",
                 "valid_to": "2026-12-31",
-            }
+            },
+            {
+                "id": "CT-2026-009",
+                "client_id": "CLI-B",
+                "factor_l_per_kwh": 1.08,
+                "price_usd_per_kwh": reference["price_usd_per_kwh"],
+                "exchange_rate": reference["exchange_rate"],
+                "valid_from": "2026-05-01",
+                "valid_to": "2026-12-31",
+            },
+            {
+                "id": "CT-2026-010",
+                "client_id": "CLI-C",
+                "factor_l_per_kwh": 1.04,
+                "price_usd_per_kwh": reference["price_usd_per_kwh"],
+                "exchange_rate": reference["exchange_rate"],
+                "valid_from": "2026-05-01",
+                "valid_to": "2026-12-31",
+            },
         ],
         "prices": [
             {
@@ -152,19 +209,19 @@ def main() -> None:
                 "source": "Planilla de facturación (precio de cierre)",
             }
         ],
-        "daily_readings": daily_readings,
-        "hourly_readings": hourly_readings,
+        "daily_readings": all_daily,
+        "hourly_readings": all_hourly,
         "reference": reference,
     }
 
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
-    total = sum(r["kwh"] for r in daily_readings)
+    total_a = sum(r["kwh"] for r in a_readings)
     print(f"seed: {OUT}")
-    print(f"lecturas diarias: {len(daily_readings)} | total kWh: {total:.6f}")
-    print(f"lecturas horarias: {len(hourly_readings)}")
-    print(f"referencia CLP: {reference['total_clp']:.2f} | litros: {reference['total_liters']:.2f}")
+    print(f"clientes: {len(payload['clients'])} | lecturas diarias: {len(all_daily)}")
+    print(f"lecturas horarias: {len(all_hourly)}")
+    print(f"referencia A: {total_a:.6f} kWh | {reference['total_clp']:.2f} CLP")
 
 
 if __name__ == "__main__":

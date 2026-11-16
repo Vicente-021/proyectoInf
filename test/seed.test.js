@@ -15,12 +15,12 @@ function freshDb() {
   return db;
 }
 
-test('el seed carga cliente, medidor, contrato, precio y lecturas', () => {
+test('el seed carga la cartera, contratos, precios y lecturas', () => {
   const db = freshDb();
 
-  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM clients').get().n, 1);
-  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM meters').get().n, 1);
-  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM contracts').get().n, 1);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM clients').get().n, 3);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM meters').get().n, 3);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM contracts').get().n, 3);
   assert.equal(db.prepare('SELECT COUNT(*) AS n FROM prices').get().n, 1);
   assert.equal(
     db.prepare("SELECT COUNT(*) AS n FROM readings WHERE kind = 'daily'").get().n,
@@ -31,6 +31,34 @@ test('el seed carga cliente, medidor, contrato, precio y lecturas', () => {
     seed.hourly_readings.length
   );
 
+  const synthetic = db
+    .prepare('SELECT id, synthetic FROM clients ORDER BY id')
+    .all()
+    .map((row) => [row.id, row.synthetic]);
+  assert.deepEqual(synthetic, [
+    ['CLI-A', 0],
+    ['CLI-B', 1],
+    ['CLI-C', 1]
+  ]);
+
+  db.close();
+});
+
+test('el seed marca la lectura faltante de B y la inconsistencia horaria de A', () => {
+  const db = freshDb();
+  const alerts = db.prepare('SELECT * FROM alerts ORDER BY id').all();
+
+  assert.equal(alerts.length, 2);
+  const missing = alerts.find((alert) => alert.type === 'missing_reading');
+  const consistency = alerts.find((alert) => alert.type === 'hourly_consistency');
+
+  assert.equal(missing.client_id, 'CLI-B');
+  assert.equal(missing.meter_id, 'M-01');
+  assert.equal(missing.ref_ts, '2026-05-15');
+  assert.equal(missing.severity, 'critical');
+  assert.equal(consistency.client_id, 'CLI-A');
+  assert.equal(consistency.severity, 'warning');
+
   db.close();
 });
 
@@ -40,7 +68,7 @@ test('el seed es idempotente', () => {
 
   assert.equal(
     db.prepare("SELECT COUNT(*) AS n FROM readings WHERE kind = 'daily'").get().n,
-    30
+    89
   );
   assert.equal(
     db.prepare("SELECT COUNT(*) AS n FROM readings WHERE kind = 'hourly'").get().n,
@@ -50,13 +78,15 @@ test('el seed es idempotente', () => {
   db.close();
 });
 
-test('la consolidación reproduce el total de la planilla', () => {
+test('la consolidación del Cliente A reproduce el total de la planilla', () => {
   const db = freshDb();
 
   const readings = db
-    .prepare("SELECT id, ts, kwh FROM readings WHERE kind = 'daily' ORDER BY ts")
+    .prepare(
+      "SELECT id, ts, kwh FROM readings WHERE kind = 'daily' AND meter_id = 'M-04' ORDER BY ts"
+    )
     .all();
-  const contract = db.prepare('SELECT * FROM contracts LIMIT 1').get();
+  const contract = db.prepare("SELECT * FROM contracts WHERE client_id = 'CLI-A'").get();
   const price = db.prepare('SELECT * FROM prices ORDER BY date DESC LIMIT 1').get();
 
   const result = consolidate({ readings, contract, price });

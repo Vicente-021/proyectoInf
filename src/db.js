@@ -35,6 +35,7 @@ export function migrate(db) {
       id         TEXT PRIMARY KEY,
       name       TEXT NOT NULL,
       contact    TEXT,
+      synthetic  INTEGER NOT NULL DEFAULT 0 CHECK (synthetic IN (0, 1)),
       status     TEXT NOT NULL DEFAULT 'active'
                  CHECK (status IN ('active', 'inactive')),
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -118,6 +119,7 @@ export function migrate(db) {
       type        TEXT NOT NULL,
       severity    TEXT NOT NULL CHECK (severity IN ('info', 'warning', 'critical')),
       message     TEXT NOT NULL,
+      ref_ts      TEXT,
       status      TEXT NOT NULL DEFAULT 'open'
                   CHECK (status IN ('open', 'resolved')),
       created_at  TEXT NOT NULL DEFAULT (datetime('now')),
@@ -142,9 +144,28 @@ export function migrate(db) {
       password_hash TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS sessions (
+      id         TEXT PRIMARY KEY,
+      user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      expires_at TEXT NOT NULL
+    );
+
     CREATE INDEX IF NOT EXISTS idx_readings_meter_ts ON readings (meter_id, ts);
     CREATE INDEX IF NOT EXISTS idx_readings_kind     ON readings (kind);
     CREATE INDEX IF NOT EXISTS idx_alerts_status     ON alerts (status);
     CREATE INDEX IF NOT EXISTS idx_audit_created     ON audit_events (created_at);
+    CREATE INDEX IF NOT EXISTS idx_sessions_expires  ON sessions (expires_at);
   `);
+
+  // Migraciones para bases creadas con el esquema del paso 1.
+  ensureColumn(db, 'clients', 'synthetic', 'INTEGER NOT NULL DEFAULT 0');
+  ensureColumn(db, 'alerts', 'ref_ts', 'TEXT');
+}
+
+function ensureColumn(db, table, column, definition) {
+  const columns = db.prepare(`PRAGMA table_info(${table})`).all();
+  if (!columns.some((item) => item.name === column)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+  }
 }
