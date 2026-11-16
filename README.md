@@ -72,7 +72,7 @@ Implementado:
 - seed idempotente desde la planilla;
 - cálculo puro con validaciones;
 - API de lectura y preview de consolidación;
-- 18 pruebas (unitarias, de base y de API) y cobertura de línea superior al 92 %.
+- 21 pruebas (unitarias, de base y de API) y cobertura de línea superior al 92 %.
 
 Pendiente para los siguientes pasos:
 
