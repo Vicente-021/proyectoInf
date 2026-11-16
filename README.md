@@ -124,6 +124,33 @@ El monto se redondea por línea a 2 decimales y el total es la suma de las líne
 - **32 pruebas**: cálculo, seed, autenticación, permisos, máquina de estados, inmutabilidad, alertas, API e interfaz estática.
 - **92,63 %** de cobertura de línea (servidor: 91,59 %).
 
+## Evidencia de RNF
+
+```bash
+npm run measure
+```
+
+Genera:
+
+- `docs/rnf.md`: tabla de objetivos, método, valor y veredicto por RNF.
+- `docs/mediciones.json`: resultados crudos y latencias.
+- `docs/coverage.txt`: reporte de cobertura.
+
+Resultados principales de la última corrida:
+
+| RNF | Resultado |
+|---|---|
+| Consolidación mensual (R-1) | p95 **5,08 ms** con 30 líneas; **46,97 ms** con 450.083 filas |
+| Ingesta (R-2) | mediana **38,12 ms** para 840 lecturas |
+| Volumen 5 años (R-3) | **450.083 filas**, 71 MB, sin degradar la consolidación |
+| Exactitud (E-1) | **0 líneas** fuera de tolerancia; diferencia total **0,004409 CLP** |
+| Integridad (E-2) | **0 duplicados** antes y después de recargar |
+| RBAC (S-2) | **8/8** controles rol × acción |
+| Auditoría (S-4) | **4/4** acciones críticas registradas |
+| Cobertura (M-1) | global **92,63 %**; cálculo **92,38 %** |
+
+Los RNF que dependen de infraestructura o de usuarios (MFA, TLS, RPO/RTO, WCAG, validación) quedan declarados como parciales o pendientes en `docs/rnf.md`.
+
 ## Limitaciones declaradas
 
 - Las integraciones con eGauge, WiseData, EIA y SAP son **adaptadores simulados**: el MVP corre local, sin Azure ni credenciales.

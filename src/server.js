@@ -143,7 +143,7 @@ function getClient(db, clientId) {
 
 function getMeter(db, clientId) {
   return db
-    .prepare('SELECT id, barge, source FROM meters WHERE client_id = ? AND active = 1 LIMIT 1')
+    .prepare('SELECT id, barge, source FROM meters WHERE client_id = ? AND active = 1 ORDER BY id LIMIT 1')
     .get(clientId);
 }
 

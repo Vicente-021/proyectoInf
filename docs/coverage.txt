@@ -1,0 +1,55 @@
+✔ round redondea a 2 decimales sin arrastrar error de punto flotante (2.539831ms)
+✔ amountClp aplica kWh x USD/kWh x tipo de cambio (0.34253ms)
+✔ litersFromKwh aplica el factor contractual (0.214253ms)
+✔ consolidate calcula líneas y totales (0.50623ms)
+✔ consolidate usa el precio del contrato si no recibe precio del período (0.201504ms)
+✔ consolidate redondea cada línea y suma los montos redondeados (0.183189ms)
+✔ consolidate rechaza un arreglo vacío (0.620859ms)
+✔ consolidate rechaza kWh negativo (0.217099ms)
+✔ consolidate rechaza precio o tipo de cambio no positivos (0.344007ms)
+✔ el seed carga la cartera, contratos, precios y lecturas (26.107601ms)
+✔ el seed marca la lectura faltante de B y la inconsistencia horaria de A (8.151425ms)
+✔ el seed es idempotente (104.172192ms)
+✔ la consolidación del Cliente A reproduce el total de la planilla (20.175474ms)
+✔ la base rechaza lecturas duplicadas y kWh negativos (12.619965ms)
+✔ el seed crea los dos roles de la demostración (9.520921ms)
+✔ GET /api/health es público e informa los conteos (168.453991ms)
+✔ sirve la interfaz y los archivos estáticos (27.255891ms)
+✔ login, sesión y logout (50.898588ms)
+✔ las rutas de negocio exigen autenticación (73.130536ms)
+✔ GET /api/clients devuelve la cartera con totales (24.18368ms)
+✔ GET /api/readings filtra por tipo, medidor y límite (23.839867ms)
+✔ el preview reproduce el total del Cliente A (48.162875ms)
+✔ el preview responde 400, 404 y 409 según el caso (75.555419ms)
+✔ el resumen del período informa cartera y alertas (15.167733ms)
+✔ un analista no puede aprobar y un aprobador no puede generar (21.639542ms)
+✔ flujo completo: alerta, ingreso manual, envío y aprobación (111.543871ms)
+✔ rechazo con motivo devuelve la consolidación a borrador (34.233346ms)
+✔ una alerta de lectura faltante no se resuelve sin ingreso manual (16.023671ms)
+✔ la ficha del cliente devuelve resumen, alertas y consolidación (15.725096ms)
+✔ una alerta de consistencia se resuelve con una nota (44.209518ms)
+✔ la lista de consolidaciones y su detalle están disponibles (72.136074ms)
+✔ crear consolidación valida cliente, período y estado (34.352878ms)
+ℹ tests 32
+ℹ suites 0
+ℹ pass 32
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1178.733175
+ℹ start of coverage report
+ℹ -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ℹ file       | line % | branch % | funcs % | uncovered lines
+ℹ -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ℹ src        |        |          |         | 
+ℹ  auth.js   | 100.00 |   100.00 |  100.00 | 
+ℹ  calc.js   |  92.38 |    80.77 |  100.00 | 14-15 40-41 60-61 71-72
+ℹ  db.js     |  96.49 |    62.50 |  100.00 | 15-16 20-21 169-170
+ℹ  seed.js   |  91.34 |    79.31 |  100.00 | 197-199 215-231
+ℹ  server.js |  91.59 |    76.34 |   92.31 | 45-48 56-57 64-65 83-85 92-93 106 260-261 264-265 442-446 499-500 513-514 582-584 597-598 633-634 653-654 663-664 682-683 690-691 693-694 696-697 757-758 761-762 784-789 798-809
+ℹ -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ℹ all files  |  92.63 |    77.81 |   96.36 | 
+ℹ -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ℹ end of coverage report
+

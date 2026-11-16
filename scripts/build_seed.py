@@ -82,11 +82,18 @@ def main() -> None:
         hourly = read_cells(z, paths["EESS"], strings)
 
         daily_readings = []
+        reference_lines = []
         for row in range(19, 49):
             serial = float(daily[f"C{row}"])
             kwh = float(daily[f"E{row}"])
-            daily_readings.append(
-                {"ts": serial_to_date(serial).isoformat(), "kwh": round(kwh, 9)}
+            ts = serial_to_date(serial).isoformat()
+            daily_readings.append({"ts": ts, "kwh": round(kwh, 9)})
+            reference_lines.append(
+                {
+                    "ts": ts,
+                    "kwh": round(kwh, 9),
+                    "amount_clp": round(float(daily[f"I{row}"]), 6),
+                }
             )
 
         hourly_readings = []
@@ -103,6 +110,7 @@ def main() -> None:
             "price_usd_per_kwh": round(float(daily["F19"]), 12),
             "exchange_rate": round(float(daily["G19"]), 9),
             "price_clp_per_kwh": round(float(daily["H19"]), 12),
+            "lines": reference_lines,
         }
 
     # Cliente A: dato real anonimizado. B y C: cartera sintética derivada de A.
