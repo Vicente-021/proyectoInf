@@ -1,6 +1,7 @@
 import { createServer } from 'node:http';
-import { resolve } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { existsSync, readFileSync, statSync } from 'node:fs';
+import { dirname, extname, resolve, sep } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { openDb } from './db.js';
 import { consolidate, round } from './calc.js';
 import {
@@ -14,6 +15,15 @@ import {
 } from './auth.js';
 
 const MAX_BODY = 1_000_000;
+const PUBLIC_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '../public');
+const MIME_TYPES = {
+  '.html': 'text/html; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.ico': 'image/x-icon'
+};
 
 function sendJson(res, status, payload, headers = {}) {
   const body = JSON.stringify(payload);
@@ -27,6 +37,41 @@ function sendJson(res, status, payload, headers = {}) {
 
 function sendError(res, status, message, extra = {}) {
   sendJson(res, status, { error: message, ...extra });
+}
+
+/** Sirve archivos de public/. Devuelve true si respondió. */
+function serveStatic(res, pathname) {
+  if (pathname === '/favicon.ico') {
+    res.writeHead(204);
+    res.end();
+    return true;
+  }
+
+  let relative;
+  try {
+    relative = pathname === '/'
+      ? 'index.html'
+      : decodeURIComponent(pathname).replace(/^\/+/, '');
+  } catch {
+    return false;
+  }
+
+  const filePath = resolve(PUBLIC_DIR, relative);
+  if (!filePath.startsWith(PUBLIC_DIR + sep) || !existsSync(filePath)) {
+    return false;
+  }
+  if (!statSync(filePath).isFile()) {
+    return false;
+  }
+
+  const content = readFileSync(filePath);
+  res.writeHead(200, {
+    'Content-Type': MIME_TYPES[extname(filePath).toLowerCase()] ?? 'application/octet-stream',
+    'Content-Length': content.length,
+    'Cache-Control': 'no-cache'
+  });
+  res.end(content);
+  return true;
 }
 
 function readJson(req) {
@@ -182,6 +227,12 @@ function getAlerts(db, { status = 'open', clientId = null } = {}) {
 async function handle(db, req, res) {
   const url = new URL(req.url ?? '/', 'http://localhost');
   const method = req.method;
+
+  // ---------- Archivos estáticos ----------
+  if (method === 'GET' && !url.pathname.startsWith('/api/')) {
+    if (serveStatic(res, url.pathname)) return;
+    return sendError(res, 404, 'recurso no encontrado');
+  }
 
   // ---------- Público ----------
   if (method === 'GET' && url.pathname === '/api/health') {

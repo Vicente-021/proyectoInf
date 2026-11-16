@@ -12,12 +12,25 @@ Incluye el flujo de negocio completo: ingesta, cálculo, consolidación, revisi�
 
 ```bash
 npm run seed     # crea data/svdm.db y carga el seed
-npm start        # API en http://localhost:3000
-npm test         # 31 pruebas
+npm start        # interfaz en http://localhost:3000 y API
+npm test         # 32 pruebas
 npm run coverage # cobertura con la herramienta integrada de Node
 ```
 
 `npm run seed` es idempotente: limpia y vuelve a cargar los datos.
+
+## Interfaz web
+
+`npm start` sirve la aplicación en **http://localhost:3000**. Incluye:
+
+- **Login** con los dos usuarios de demostración.
+- **Resumen**: KPIs, consumo por cliente, estado del cierre, fuentes y actividad.
+- **Consolidación**: generar, ver líneas, enviar a revisión, aprobar o rechazar.
+- **Clientes**: cartera y ficha por cliente con contrato, lecturas y alertas.
+- **Alertas**: filtro por estado, ingreso manual y resolución con nota.
+- **Auditoría**: historial de acciones.
+
+La interfaz usa la misma sesión por cookie que la API; no hay datos en memoria del navegador: todo se lee y escribe en SQLite.
 
 ## Usuarios de demostración
 
@@ -108,8 +121,8 @@ El monto se redondea por línea a 2 decimales y el total es la suma de las líne
 
 ## Pruebas y cobertura
 
-- **31 pruebas**: cálculo, seed, autenticación, permisos, máquina de estados, inmutabilidad, alertas y API.
-- **92,95 %** de cobertura de línea (servidor: 92,08 %).
+- **32 pruebas**: cálculo, seed, autenticación, permisos, máquina de estados, inmutabilidad, alertas, API e interfaz estática.
+- **92,63 %** de cobertura de línea (servidor: 91,59 %).
 
 ## Limitaciones declaradas
 
@@ -120,4 +133,4 @@ El monto se redondea por línea a 2 decimales y el total es la suma de las líne
 
 ## Siguiente paso
 
-Conectar la interfaz a esta API y agregar la medición de RNF, la validación con usuarios y el deck de E3.
+Medir los RNF con la aplicación en ejecución, ejecutar la validación con usuarios y construir el deck de E3 con esas evidencias.

@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SVDM | Gasco Marine</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+
+  <!-- ===================== Login ===================== -->
+  <div id="login-screen" class="login-screen">
+    <form id="login-form" class="login-card" autocomplete="on">
+      <div class="login-brand">SVDM | Gasco Marine</div>
+      <p class="login-sub">Sistema de Venta y Despacho Marino</p>
+
+      <label for="login-username">Usuario</label>
+      <input id="login-username" name="username" type="text" autocomplete="username" required>
+
+      <label for="login-password">Contraseña</label>
+      <input id="login-password" name="password" type="password" autocomplete="current-password" required>
+
+      <div id="login-error" class="form-error hidden"></div>
+      <button class="btn btn-primary btn-block" id="login-submit" type="submit">Ingresar</button>
+
+      <div class="login-hint">
+        <b>Demo:</b> <code>u-analista</code> / <code>demo</code> &nbsp;·&nbsp;
+        <code>u-aprobador</code> / <code>demo</code>
+      </div>
+    </form>
+  </div>
+
+  <!-- ===================== Aplicación ===================== -->
+  <div id="app" class="app hidden">
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-name">SVDM</span>
+        <span class="brand-sep">|</span>
+        <span class="brand-company">Gasco Marine</span>
+      </div>
+      <div class="user-info">
+        <span class="local-badge">Local · SQLite</span>
+        <span id="user-name">—</span>
+        <span id="user-role" class="role-badge">—</span>
+        <button class="link-btn" id="logout" type="button">Cerrar sesión</button>
+      </div>
+    </header>
+
+    <div class="layout">
+      <nav class="sidebar" aria-label="Menú principal">
+        <h3>Menú</h3>
+        <button class="menu-item active" type="button" data-view="resumen">Resumen</button>
+        <button class="menu-item" type="button" data-view="consolidacion">Consolidación</button>
+        <button class="menu-item" type="button" data-view="clientes">Clientes</button>
+        <button class="menu-item" type="button" data-view="alertas">Alertas</button>
+        <button class="menu-item" type="button" data-view="auditoria">Auditoría</button>
+      </nav>
+
+      <main class="content">
+
+        <!-- ===================== Resumen ===================== -->
+        <section id="view-resumen" class="view">
+          <div class="header-box">
+            <div>
+              <h2>Resumen del período</h2>
+              <p class="muted">
+                Período: <b id="resumen-period">—</b> &nbsp;|&nbsp;
+                <span id="resumen-source">Datos locales</span>
+              </p>
+            </div>
+            <button class="btn btn-primary" type="button" data-go="consolidacion">Ir a consolidación</button>
+          </div>
+
+          <div id="resumen-alert"></div>
+
+          <div class="cards">
+            <div class="card">
+              <div class="card-title">Clientes</div>
+              <div class="card-value" id="kpi-clients">—</div>
+              <div class="card-sub">Cartera del período</div>
+            </div>
+            <div class="card">
+              <div class="card-title">Lecturas diarias</div>
+              <div class="card-value" id="kpi-readings">—</div>
+              <div class="card-sub">eGauge / WiseData (adaptador)</div>
+            </div>
+            <div class="card">
+              <div class="card-title">Alertas abiertas</div>
+              <div class="card-value" id="kpi-alerts">—</div>
+              <div class="card-sub" id="kpi-alerts-sub">—</div>
+            </div>
+            <div class="card">
+              <div class="card-title">Monto estimado</div>
+              <div class="card-value" id="kpi-clp">—</div>
+              <div class="card-sub">Consumo × precio × tipo de cambio</div>
+            </div>
+          </div>
+
+          <div class="grid-2">
+            <div class="panel">
+              <div class="panel-head">
+                <h3>Consumo por cliente (kWh)</h3>
+                <span class="panel-sub">Total del período</span>
+              </div>
+              <div id="resumen-bars" class="bars"></div>
+            </div>
+
+            <div class="panel">
+              <div class="panel-head">
+                <h3>Estado del cierre</h3>
+                <span class="panel-sub" id="resumen-status-sub">—</span>
+              </div>
+              <div id="resumen-status"></div>
+            </div>
+          </div>
+
+          <div class="grid-2">
+            <div class="panel">
+              <div class="panel-head">
+                <h3>Fuentes de datos</h3>
+                <span class="panel-sub">Adaptadores locales</span>
+              </div>
+              <div class="source"><span><span class="dot"></span>eGauge</span><span class="badge badge-ok">OK</span></div>
+              <div class="source"><span><span class="dot"></span>WiseData</span><span class="badge badge-ok">OK</span></div>
+              <div class="source"><span><span class="dot"></span>EIA (Mont Belvieu)</span><span class="badge badge-ok">OK</span></div>
+              <p class="footnote">Integraciones simuladas: el MVP corre local, sin Azure ni credenciales.</p>
+            </div>
+
+            <div class="panel">
+              <div class="panel-head">
+                <h3>Actividad reciente</h3>
+                <span class="panel-sub">Auditoría</span>
+              </div>
+              <ul id="resumen-audit" class="timeline"></ul>
+            </div>
+          </div>
+        </section>
+
+        <!-- ===================== Consolidación ===================== -->
+        <section id="view-consolidacion" class="view hidden">
+          <div class="header-box">
+            <div>
+              <h2>Consolidación mensual</h2>
+              <p class="muted">Genera, revisa y aprueba el cierre del período.</p>
+            </div>
+            <div class="actions-inline">
+              <label for="consolidacion-client" class="inline-label">Cliente</label>
+              <select id="consolidacion-client" class="select"></select>
+              <button class="btn btn-primary" id="btn-generate" type="button">Generar consolidación</button>
+            </div>
+          </div>
+
+          <div id="consolidacion-alert"></div>
+          <div id="consolidacion-list" class="panel"></div>
+          <div id="consolidacion-detail"></div>
+        </section>
+
+        <!-- ===================== Clientes ===================== -->
+        <section id="view-clientes" class="view hidden">
+          <div class="header-box">
+            <div>
+              <h2>Clientes</h2>
+              <p class="muted">Cartera del período y estado de cada cuenta.</p>
+            </div>
+          </div>
+          <div id="clientes-list" class="panel"></div>
+        </section>
+
+        <!-- ===================== Ficha de cliente ===================== -->
+        <section id="view-cliente" class="view hidden">
+          <div class="header-box">
+            <div>
+              <button class="link-btn back" id="btn-back-clientes" type="button">← Volver a clientes</button>
+              <h2 id="cliente-title">Cliente</h2>
+              <p class="muted" id="cliente-sub">—</p>
+            </div>
+            <div class="actions-inline">
+              <span id="cliente-badge" class="badge">—</span>
+              <button class="btn btn-primary" id="btn-cliente-consolidacion" type="button">Ir a consolidación</button>
+            </div>
+          </div>
+
+          <div class="cards">
+            <div class="card"><div class="card-title">Consumo</div><div class="card-value" id="cliente-kwh">—</div><div class="card-sub">kWh del período</div></div>
+            <div class="card"><div class="card-title">Gas equivalente</div><div class="card-value" id="cliente-liters">—</div><div class="card-sub">Litros según factor</div></div>
+            <div class="card"><div class="card-title">Monto estimado</div><div class="card-value" id="cliente-clp">—</div><div class="card-sub">CLP</div></div>
+            <div class="card"><div class="card-title">Alertas abiertas</div><div class="card-value" id="cliente-alerts">—</div><div class="card-sub" id="cliente-alerts-sub">—</div></div>
+          </div>
+
+          <div class="grid-2">
+            <div class="panel">
+              <div class="panel-head"><h3>Datos del contrato</h3><span class="panel-sub" id="cliente-contract-id">—</span></div>
+              <dl class="kv" id="cliente-contract"></dl>
+            </div>
+            <div class="panel">
+              <div class="panel-head"><h3>Alertas del cliente</h3><span class="panel-sub">Solo abiertas</span></div>
+              <div id="cliente-alert-list"></div>
+            </div>
+          </div>
+
+          <div class="panel" style="margin-bottom:15px;">
+            <div class="panel-head"><h3>Últimas lecturas</h3><span class="panel-sub">Últimas 12 del período</span></div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Fecha</th><th>Fuente</th><th>kWh</th><th>Estado</th></tr></thead>
+                <tbody id="cliente-readings"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="panel" id="cliente-consolidation"></div>
+        </section>
+
+        <!-- ===================== Alertas ===================== -->
+        <section id="view-alertas" class="view hidden">
+          <div class="header-box">
+            <div>
+              <h2>Alertas</h2>
+              <p class="muted">Faltantes de lectura e inconsistencias de datos.</p>
+            </div>
+            <div class="actions-inline">
+              <label for="alert-filter" class="inline-label">Estado</label>
+              <select id="alert-filter" class="select">
+                <option value="open">Abiertas</option>
+                <option value="resolved">Resueltas</option>
+                <option value="all">Todas</option>
+              </select>
+            </div>
+          </div>
+          <div id="alertas-list" class="panel"></div>
+        </section>
+
+        <!-- ===================== Auditoría ===================== -->
+        <section id="view-auditoria" class="view hidden">
+          <div class="header-box">
+            <div>
+              <h2>Auditoría</h2>
+              <p class="muted">Quién hizo qué, cuándo y con qué motivo.</p>
+            </div>
+          </div>
+          <div id="auditoria-list" class="panel"></div>
+        </section>
+
+      </main>
+    </div>
+  </div>
+
+  <!-- ===================== Diálogos ===================== -->
+  <dialog id="dlg-manual">
+    <form method="dialog" id="form-manual">
+      <h3>Ingresar lectura manual</h3>
+      <p class="muted">Queda registrada con tu usuario, la fecha, la hora y el motivo.</p>
+
+      <label for="manual-meter">Medidor</label>
+      <select id="manual-meter" class="select" required></select>
+
+      <label for="manual-ts">Fecha</label>
+      <input id="manual-ts" type="date" required>
+
+      <label for="manual-kwh">Lectura (kWh)</label>
+      <input id="manual-kwh" type="text" inputmode="decimal" placeholder="Ej.: 1.250,5" required>
+
+      <label for="manual-reason">Motivo</label>
+      <textarea id="manual-reason" placeholder="Ej.: medidor sin señal; valor tomado del registro en terreno" required></textarea>
+
+      <div id="manual-error" class="form-error hidden"></div>
+      <div class="dialog-actions">
+        <button class="btn" type="button" data-close="dlg-manual">Cancelar</button>
+        <button class="btn btn-primary" id="manual-save" type="button">Guardar y registrar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="dlg-reject">
+    <form method="dialog" id="form-reject">
+      <h3>Rechazar consolidación</h3>
+      <p class="muted">El rechazo vuelve la consolidación a borrador y queda auditado con el motivo.</p>
+      <label for="reject-reason">Motivo del rechazo</label>
+      <textarea id="reject-reason" placeholder="Ej.: el consumo no coincide con el nivel de GLP informado" required></textarea>
+      <div id="reject-error" class="form-error hidden"></div>
+      <div class="dialog-actions">
+        <button class="btn" type="button" data-close="dlg-reject">Cancelar</button>
+        <button class="btn btn-danger" id="reject-save" type="button">Rechazar y devolver</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="dlg-resolve">
+    <form method="dialog" id="form-resolve">
+      <h3>Resolver alerta</h3>
+      <p class="muted">La resolución queda auditada con tu usuario y la nota.</p>
+      <label for="resolve-note">Nota de resolución</label>
+      <textarea id="resolve-note" placeholder="Ej.: se revisaron los saltos con el área de operación" required></textarea>
+      <div id="resolve-error" class="form-error hidden"></div>
+      <div class="dialog-actions">
+        <button class="btn" type="button" data-close="dlg-resolve">Cancelar</button>
+        <button class="btn btn-primary" id="resolve-save" type="button">Resolver</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

@@ -189,7 +189,7 @@ export function seedDatabase(db, data) {
       'seed',
       'database',
       null,
-      `Carga inicial desde ${data.meta.source} (período ${data.meta.period})`
+      `Carga inicial de la planilla anonimizada (período ${data.meta.period})`
     );
 
     db.exec('COMMIT');

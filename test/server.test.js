@@ -58,6 +58,26 @@ test('GET /api/health es público e informa los conteos', async (t) => {
   assert.equal(body.counts.alerts, 2);
 });
 
+test('sirve la interfaz y los archivos estáticos', async (t) => {
+  const { base } = await withServer(t);
+
+  const index = await fetch(`${base}/`);
+  assert.equal(index.status, 200);
+  assert.match(index.headers.get('content-type'), /text\/html/);
+  assert.match(await index.text(), /SVDM/);
+
+  const app = await fetch(`${base}/app.js`);
+  assert.equal(app.status, 200);
+  assert.match(app.headers.get('content-type'), /javascript/);
+
+  const css = await fetch(`${base}/styles.css`);
+  assert.equal(css.status, 200);
+  assert.match(css.headers.get('content-type'), /text\/css/);
+
+  const missing = await fetch(`${base}/no-existe.html`);
+  assert.equal(missing.status, 404);
+});
+
 test('login, sesión y logout', async (t) => {
   const { base } = await withServer(t);
 
