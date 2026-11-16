@@ -161,15 +161,31 @@ function getLatestPrice(db) {
   return db.prepare('SELECT * FROM prices ORDER BY date DESC LIMIT 1').get();
 }
 
+function periodBounds(period) {
+  const match = /^(\d{4})-(\d{2})$/.exec(String(period ?? ''));
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  if (month < 1 || month > 12) return null;
+  const nextYear = month === 12 ? year + 1 : year;
+  const nextMonth = month === 12 ? 1 : month + 1;
+  return {
+    start: `${period}-01`,
+    end: `${nextYear}-${String(nextMonth).padStart(2, '0')}-01`
+  };
+}
+
 function getReadings(db, meterId, period) {
+  const bounds = periodBounds(period);
+  if (!bounds) return [];
   return db
     .prepare(
       `SELECT id, ts, kwh, source, kind, status, note
        FROM readings
-       WHERE meter_id = ? AND kind = 'daily' AND ts LIKE ?
+       WHERE meter_id = ? AND kind = 'daily' AND ts >= ? AND ts < ?
        ORDER BY ts`
     )
-    .all(meterId, `${period}%`);
+    .all(meterId, bounds.start, bounds.end);
 }
 
 function getConsolidation(db, consolidationId) {
@@ -301,15 +317,17 @@ async function handle(db, req, res) {
   if (method === 'GET' && url.pathname === '/api/summary') {
     const period = url.searchParams.get('period') ?? defaultPeriod(db);
     if (!period) return sendError(res, 400, 'no hay período configurado');
+    const bounds = periodBounds(period);
+    if (!bounds) return sendError(res, 400, 'período inválido');
 
     const price = getLatestPrice(db);
     const totalKwh =
       db
         .prepare(
           `SELECT ROUND(SUM(kwh), 9) AS total
-           FROM readings WHERE kind = 'daily' AND ts LIKE ?`
+           FROM readings WHERE kind = 'daily' AND ts >= ? AND ts < ?`
         )
-        .get(`${period}%`).total ?? 0;
+        .get(bounds.start, bounds.end).total ?? 0;
 
     const statuses = db
       .prepare('SELECT status, COUNT(*) AS n FROM consolidations WHERE period = ? GROUP BY status')
@@ -319,8 +337,8 @@ async function handle(db, req, res) {
       period,
       clients: db.prepare('SELECT COUNT(*) AS n FROM clients').get().n,
       readings: db
-        .prepare("SELECT COUNT(*) AS n FROM readings WHERE kind = 'daily' AND ts LIKE ?")
-        .get(`${period}%`).n,
+        .prepare("SELECT COUNT(*) AS n FROM readings WHERE kind = 'daily' AND ts >= ? AND ts < ?")
+        .get(bounds.start, bounds.end).n,
       openAlerts: db.prepare("SELECT COUNT(*) AS n FROM alerts WHERE status = 'open'").get().n,
       criticalAlerts: db
         .prepare("SELECT COUNT(*) AS n FROM alerts WHERE status = 'open' AND severity = 'critical'")
@@ -336,11 +354,14 @@ async function handle(db, req, res) {
 
   if (method === 'GET' && url.pathname === '/api/clients') {
     const period = url.searchParams.get('period') ?? defaultPeriod(db);
+    const bounds = periodBounds(period);
+    if (!bounds) return sendError(res, 400, 'período inválido');
     const clients = db
       .prepare(
         `SELECT c.id, c.name, c.synthetic, m.id AS meter_id, m.barge,
                 (SELECT ROUND(SUM(r.kwh), 9) FROM readings r
-                 WHERE r.meter_id = m.id AND r.kind = 'daily' AND r.ts LIKE ?) AS total_kwh,
+                 WHERE r.meter_id = m.id AND r.kind = 'daily'
+                   AND r.ts >= ? AND r.ts < ?) AS total_kwh,
                 (SELECT COUNT(*) FROM alerts a
                  WHERE a.client_id = c.id AND a.status = 'open') AS open_alerts,
                 (SELECT co.status FROM consolidations co
@@ -349,7 +370,7 @@ async function handle(db, req, res) {
          JOIN meters m ON m.client_id = c.id
          ORDER BY c.id`
       )
-      .all(`${period}%`, period);
+      .all(bounds.start, bounds.end, period);
     return sendJson(res, 200, { period, clients });
   }
 

@@ -13,7 +13,7 @@ Incluye el flujo de negocio completo: ingesta, cálculo, consolidación, revisi�
 ```bash
 npm run seed     # crea data/svdm.db y carga el seed
 npm start        # interfaz en http://localhost:3000 y API
-npm test         # 32 pruebas
+npm test         # 33 pruebas
 npm run coverage # cobertura con la herramienta integrada de Node
 ```
 
@@ -121,8 +121,8 @@ El monto se redondea por línea a 2 decimales y el total es la suma de las líne
 
 ## Pruebas y cobertura
 
-- **32 pruebas**: cálculo, seed, autenticación, permisos, máquina de estados, inmutabilidad, alertas, API e interfaz estática.
-- **92,63 %** de cobertura de línea (servidor: 91,59 %).
+- **33 pruebas**: cálculo, seed, autenticación, permisos, máquina de estados, inmutabilidad, alertas, API e interfaz estática.
+- **92,74 %** de cobertura de línea (servidor: 91,81 %).
 
 ## Evidencia de RNF
 
@@ -140,16 +140,32 @@ Resultados principales de la última corrida:
 
 | RNF | Resultado |
 |---|---|
-| Consolidación mensual (R-1) | p95 **5,08 ms** con 30 líneas; **46,97 ms** con 450.083 filas |
-| Ingesta (R-2) | mediana **38,12 ms** para 840 lecturas |
+| Consolidación mensual (R-1) | p95 **3,17 ms** con 30 líneas; **5,26 ms** con 450.083 filas |
+| Ingesta (R-2) | mediana **9,31 ms** para 840 lecturas |
 | Volumen 5 años (R-3) | **450.083 filas**, 71 MB, sin degradar la consolidación |
 | Exactitud (E-1) | **0 líneas** fuera de tolerancia; diferencia total **0,004409 CLP** |
 | Integridad (E-2) | **0 duplicados** antes y después de recargar |
 | RBAC (S-2) | **8/8** controles rol × acción |
 | Auditoría (S-4) | **4/4** acciones críticas registradas |
-| Cobertura (M-1) | global **92,63 %**; cálculo **92,38 %** |
+| Cobertura (M-1) | global **92,74 %**; cálculo **92,38 %** |
 
 Los RNF que dependen de infraestructura o de usuarios (MFA, TLS, RPO/RTO, WCAG, validación) quedan declarados como parciales o pendientes en `docs/rnf.md`.
+
+## Ciencias aplicadas
+
+```bash
+npm run sciences
+```
+
+Genera `docs/ciencias.md` y `docs/ciencias.json` con:
+
+| Aplicación | Resultado |
+|---|---|
+| **CI-1** Balance energía/masa | factor **1,106077321 L/kWh**; 34.079,6 L calculados; diferencia **0 L** |
+| **CI-2** Complejidad e índices | índice `(meter_id, ts)`; consulta por rango **0,20 ms** vs `LIKE` **4,21 ms** (p95) con 450.000 filas |
+| **CI-3** Estadística de anomalías | 1 outlier diario; 12 caídas y 13 saltos horarios; inyección controlada con **recall 100 %** |
+
+El cambio de `LIKE` a rango explícito se aplicó en `getReadings` y en las consultas del resumen; es una de las iteraciones de diseño que se documentan para E3.
 
 ## Validación con usuarios
 

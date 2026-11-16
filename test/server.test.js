@@ -211,6 +211,17 @@ test('el resumen del período informa cartera y alertas', async (t) => {
   assert.equal(body.period, '2026-05');
 });
 
+test('el resumen y la cartera rechazan períodos inválidos', async (t) => {
+  const { base } = await withServer(t);
+  const cookie = await login(base, 'u-analista');
+
+  const summary = await api(base, '/api/summary?period=2026-13', { cookie });
+  assert.equal(summary.status, 400);
+
+  const clients = await api(base, '/api/clients?period=2026-5', { cookie });
+  assert.equal(clients.status, 400);
+});
+
 test('un analista no puede aprobar y un aprobador no puede generar', async (t) => {
   const { base } = await withServer(t);
   const analyst = await login(base, 'u-analista');

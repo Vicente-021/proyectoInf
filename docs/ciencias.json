@@ -1,0 +1,240 @@
+{
+  "generated_at": "2026-11-16T23:16:16.700Z",
+  "balance": {
+    "totalKwh": 30811.227520008,
+    "totalLiters": 34079.6,
+    "factor": 1.106077321258,
+    "calculatedLiters": 34079.6,
+    "difference": 0,
+    "relativeMeter": 0.005,
+    "relativeFactor": 0.01,
+    "relativeCombined": 0.01118,
+    "uncertaintyLiters": 381.022
+  },
+  "real": {
+    "daily": {
+      "count": 30,
+      "fences": {
+        "q1": 994.334,
+        "q3": 1086.237,
+        "iqr": 91.903,
+        "lower": 856.479,
+        "upper": 1224.092
+      },
+      "outliers": [
+        {
+          "ts": "2026-05-02",
+          "kwh": 479.121564456
+        }
+      ]
+    },
+    "hourly": {
+      "count": 751,
+      "deltas": 750,
+      "zeros": 667,
+      "negatives": 12,
+      "positives": 71,
+      "positiveFences": {
+        "q1": 10.8,
+        "q3": 37.85,
+        "iqr": 27.05,
+        "lower": -29.775,
+        "upper": 78.425
+      },
+      "highOutliers": 13,
+      "highOutlierSamples": [
+        {
+          "ts": "2026-06-02 18:00",
+          "delta": 341.5
+        },
+        {
+          "ts": "2026-06-04 10:00",
+          "delta": 343.1
+        },
+        {
+          "ts": "2026-06-05 17:00",
+          "delta": 113
+        },
+        {
+          "ts": "2026-06-05 22:00",
+          "delta": 346.4
+        },
+        {
+          "ts": "2026-06-08 12:00",
+          "delta": 346.9
+        }
+      ],
+      "negativeSamples": [
+        {
+          "ts": "2026-06-02 17:00",
+          "delta": -341.5
+        },
+        {
+          "ts": "2026-06-04 09:00",
+          "delta": -343.1
+        },
+        {
+          "ts": "2026-06-05 21:00",
+          "delta": -346.4
+        },
+        {
+          "ts": "2026-06-08 11:00",
+          "delta": -346.9
+        },
+        {
+          "ts": "2026-06-08 16:00",
+          "delta": -346.9
+        }
+      ],
+      "resetPairs": 11,
+      "resetSamples": [
+        {
+          "dropTs": "2026-06-02 17:00",
+          "drop": -341.5,
+          "jumpTs": "2026-06-02 18:00",
+          "jump": 341.5
+        },
+        {
+          "dropTs": "2026-06-04 09:00",
+          "drop": -343.1,
+          "jumpTs": "2026-06-04 10:00",
+          "jump": 343.1
+        },
+        {
+          "dropTs": "2026-06-05 21:00",
+          "drop": -346.4,
+          "jumpTs": "2026-06-05 22:00",
+          "jump": 346.4
+        },
+        {
+          "dropTs": "2026-06-08 11:00",
+          "drop": -346.9,
+          "jumpTs": "2026-06-08 12:00",
+          "jump": 346.9
+        }
+      ]
+    }
+  },
+  "injection": {
+    "anomalies": [
+      {
+        "index": 5,
+        "kind": "alto +4σ",
+        "value": 1360
+      },
+      {
+        "index": 15,
+        "kind": "bajo −4σ",
+        "value": 720
+      },
+      {
+        "index": 25,
+        "kind": "cero",
+        "value": 0
+      },
+      {
+        "index": 35,
+        "kind": "doble",
+        "value": 2080
+      },
+      {
+        "index": 45,
+        "kind": "20 % del valor",
+        "value": 208
+      },
+      {
+        "index": 55,
+        "kind": "alto +5σ",
+        "value": 1440
+      }
+    ],
+    "cleanFences": {
+      "q1": 962.192,
+      "q3": 1081.244,
+      "iqr": 119.052,
+      "lower": 783.615,
+      "upper": 1259.821
+    },
+    "observedFences": {
+      "q1": 957.223,
+      "q3": 1085.388,
+      "iqr": 128.165,
+      "lower": 764.976,
+      "upper": 1277.635
+    },
+    "cleanScore": {
+      "tp": 0,
+      "fp": 1,
+      "fn": 6,
+      "precision": 0,
+      "recall": 0,
+      "flagged": [
+        9
+      ]
+    },
+    "contaminatedWithCleanFences": {
+      "tp": 6,
+      "fp": 1,
+      "fn": 0,
+      "precision": 0.8571428571428571,
+      "recall": 1,
+      "flagged": [
+        5,
+        9,
+        15,
+        25,
+        35,
+        45,
+        55
+      ]
+    },
+    "contaminatedWithObservedFences": {
+      "tp": 6,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1,
+      "recall": 1,
+      "flagged": [
+        5,
+        15,
+        25,
+        35,
+        45,
+        55
+      ]
+    }
+  },
+  "database": {
+    "rows": 450000,
+    "sizeBytes": 74465280,
+    "bulkMs": 3578.844,
+    "like": {
+      "plan": [
+        "SEARCH readings USING INDEX idx_readings_meter_ts (meter_id=?)"
+      ],
+      "rows": 30,
+      "times": {
+        "count": 30,
+        "min": 3.71,
+        "p50": 4.028,
+        "p95": 4.211,
+        "max": 4.261,
+        "mean": 4.004
+      }
+    },
+    "range": {
+      "plan": [
+        "SEARCH readings USING INDEX idx_readings_meter_ts (meter_id=? AND ts>? AND ts<?)"
+      ],
+      "rows": 30,
+      "times": {
+        "count": 30,
+        "min": 0.123,
+        "p50": 0.129,
+        "p95": 0.198,
+        "max": 0.266,
+        "mean": 0.142
+      }
+    }
+  }
+}
