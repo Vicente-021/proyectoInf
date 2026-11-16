@@ -12,6 +12,7 @@
     "start": "node src/server.js",
     "test": "node --test",
     "coverage": "node --experimental-test-coverage --test",
-    "measure": "node scripts/measure.mjs"
+    "measure": "node scripts/measure.mjs",
+    "validate:analyze": "node scripts/analyze-validation.mjs"
   }
 }

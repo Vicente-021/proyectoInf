@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Formulario de validación — SVDM</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: Arial, Helvetica, sans-serif; color: #222; margin: 24px; font-size: 12px; }
+  h1 { font-size: 18px; margin: 0 0 2px; }
+  h2 { font-size: 13px; margin: 16px 0 6px; border-bottom: 1px solid #bbb; padding-bottom: 3px; }
+  .muted { color: #666; font-size: 11px; }
+  .row { display: flex; gap: 18px; flex-wrap: wrap; margin: 6px 0; }
+  .field { display: flex; align-items: center; gap: 6px; }
+  .line { border-bottom: 1px solid #777; min-width: 90px; height: 16px; display: inline-block; }
+  .line.long { min-width: 260px; }
+  .box { width: 12px; height: 12px; border: 1px solid #555; display: inline-block; }
+  table { width: 100%; border-collapse: collapse; margin-top: 6px; }
+  th, td { border: 1px solid #999; padding: 5px 6px; text-align: left; vertical-align: top; }
+  th { background: #eef2f6; font-size: 11px; }
+  .small { font-size: 10px; }
+  .scale { display: flex; gap: 8px; align-items: center; }
+  .scale span { border: 1px solid #777; width: 18px; height: 18px; display: inline-flex; align-items: center; justify-content: center; }
+  .notes { border: 1px solid #999; min-height: 90px; padding: 6px; }
+  .print { margin-bottom: 14px; padding: 8px 14px; background: #1e3a5f; color: #fff; border: 0; border-radius: 4px; cursor: pointer; }
+  @media print {
+    body { margin: 10mm; font-size: 10px; }
+    .print { display: none; }
+    h2 { margin-top: 10px; }
+  }
+</style>
+</head>
+<body>
+
+<button class="print" onclick="window.print()">Imprimir</button>
+
+<h1>Validación de usabilidad — SVDM MVP</h1>
+<div class="muted">Grupo 14 · Proyecto Informático · Hoja de observación (una por participante)</div>
+
+<div class="row" style="margin-top:14px;">
+  <div class="field">Participante: <span class="line"></span></div>
+  <div class="field">Perfil: <span class="line long"></span></div>
+  <div class="field"><span class="box"></span> Consentimiento firmado</div>
+</div>
+
+<h2>T1 — Cerrar el período del Cliente B</h2>
+<table>
+  <tr><th style="width:45%">Paso</th><th style="width:15%">¿Completó?</th><th>Observación</th></tr>
+  <tr><td>1. Entrar como analista</td><td>□ Sí □ No</td><td></td></tr>
+  <tr><td>2. Encontrar la alerta del Cliente B</td><td>□ Sí □ No</td><td></td></tr>
+  <tr><td>3. Registrar lectura manual con motivo</td><td>□ Sí □ No</td><td></td></tr>
+  <tr><td>4. Generar la consolidación</td><td>□ Sí □ No</td><td></td></tr>
+  <tr><td>5. Enviar a revisión</td><td>□ Sí □ No</td><td></td></tr>
+  <tr><td>6. Entrar como aprobador y aprobar</td><td>□ Sí □ No</td><td></td></tr>
+  <tr><td>7. Verificar que queda bloqueada</td><td>□ Sí □ No</td><td></td></tr>
+</table>
+
+<div class="row" style="margin-top:8px;">
+  <div class="field">Tiempo total T1: <span class="line"></span> s</div>
+  <div class="field">Ayuda: □ 0 □ 1 □ 2</div>
+  <div class="field">Errores: <span class="line" style="min-width:40px;"></span></div>
+  <div class="field">T1 completada: □ Sí □ No</div>
+</div>
+
+<h2>T2 — Auditoría</h2>
+<div class="row">
+  <div class="field">¿Encontró el evento de ingreso manual? □ Sí □ No</div>
+  <div class="field">¿Leyó actor y motivo? □ Sí □ No</div>
+</div>
+<div class="notes" style="min-height:40px;"></div>
+
+<h2>T3 — Trazabilidad</h2>
+<div class="row">
+  <div class="field">¿Identificó kWh, precio, tipo de cambio y factor? □ Sí □ No</div>
+  <div class="field">¿Explicó la operación? □ Sí □ No</div>
+</div>
+<div class="notes" style="min-height:40px;"></div>
+
+<h2>Escalas</h2>
+<div class="row">
+  <div class="field">Facilidad (1 = muy difícil, 7 = muy fácil):</div>
+  <div class="scale"><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span></div>
+</div>
+<div class="row">
+  <div class="field">Confianza en el resultado (1 = nada, 7 = total):</div>
+  <div class="scale"><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span></div>
+</div>
+
+<h2>Observaciones por momento</h2>
+<table>
+  <tr><th style="width:30%">Momento</th><th>Qué pasó</th><th style="width:12%">¿Ayuda?</th></tr>
+  <tr><td>Al entrar</td><td></td><td></td></tr>
+  <tr><td>Al ver la alerta</td><td></td><td></td></tr>
+  <tr><td>Al ingresar la lectura</td><td></td><td></td></tr>
+  <tr><td>Al generar</td><td></td><td></td></tr>
+  <tr><td>Al enviar a revisión</td><td></td><td></td></tr>
+  <tr><td>Al cambiar de rol</td><td></td><td></td></tr>
+  <tr><td>Al aprobar</td><td></td><td></td></tr>
+  <tr><td>Al buscar auditoría</td><td></td><td></td></tr>
+</table>
+
+<h2>Debrief</h2>
+<div class="small">¿Qué fue lo más fácil? ¿Qué fue lo más confuso? ¿Confiaría en el monto? ¿Qué cambiaría primero?</div>
+<div class="notes"></div>
+
+<div class="muted" style="margin-top:14px;">No registrar nombres ni datos personales. Usar solo el identificador P1–P5.</div>
+
+</body>
+</html>

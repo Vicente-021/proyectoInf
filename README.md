@@ -151,6 +151,24 @@ Resultados principales de la última corrida:
 
 Los RNF que dependen de infraestructura o de usuarios (MFA, TLS, RPO/RTO, WCAG, validación) quedan declarados como parciales o pendientes en `docs/rnf.md`.
 
+## Validación con usuarios
+
+El kit está en `docs/validacion/`:
+
+- `protocolo.md`: diseño, tareas, métricas y análisis.
+- `instrumento.md`: guion, tarjetas y hoja de observación.
+- `consentimiento.md`: consentimiento informado.
+- `formulario.html`: hoja imprimible.
+- `registro.csv`: registro de las 5 sesiones.
+
+Con 5 participantes, el umbral de RNF-U-2 es **4 de 5 sin ayuda**. Después de las sesiones:
+
+```bash
+npm run validate:analyze
+```
+
+Genera `docs/validacion/resultados.md` con la tasa de éxito, tiempos, ayuda, errores y comentarios. Si aún no hay registros, el informe queda en estado **Pendiente**.
+
 ## Limitaciones declaradas
 
 - Las integraciones con eGauge, WiseData, EIA y SAP son **adaptadores simulados**: el MVP corre local, sin Azure ni credenciales.
@@ -160,4 +178,4 @@ Los RNF que dependen de infraestructura o de usuarios (MFA, TLS, RPO/RTO, WCAG, 
 
 ## Siguiente paso
 
-Medir los RNF con la aplicación en ejecución, ejecutar la validación con usuarios y construir el deck de E3 con esas evidencias.
+Ejecutar las 5 sesiones de validación, completar `docs/validacion/registro.csv`, correr `npm run validate:analyze` y construir el deck de E3 con las mediciones y los resultados.
