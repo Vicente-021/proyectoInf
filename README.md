@@ -32,6 +32,19 @@ npm run coverage # cobertura con la herramienta integrada de Node
 
 La interfaz usa la misma sesión por cookie que la API; no hay datos en memoria del navegador: todo se lee y escribe en SQLite.
 
+## Entregables de E3
+
+| Entregable | Ubicación |
+|---|---|
+| Deck de E3 | `entrega_3/main.pdf` (fuente: `entrega_3/main.tex`) |
+| Guion de exposición y demo | `entrega_3/guion.md` |
+| Medición de RNF | `docs/rnf.md` y `docs/mediciones.json` |
+| Ciencias aplicadas | `docs/ciencias.md` y `docs/ciencias.json` |
+| Kit de validación | `docs/validacion/` |
+| Índice de evidencia | `docs/README.md` |
+
+El deck tiene 13 láminas principales (10 minutos) y 8 de respaldo. Se compila con `pdflatex main.tex` dos veces desde `entrega_3/`.
+
 ## Usuarios de demostración
 
 | Usuario | Rol | Contraseña |
@@ -194,4 +207,4 @@ Genera `docs/validacion/resultados.md` con la tasa de éxito, tiempos, ayuda, er
 
 ## Siguiente paso
 
-Ejecutar las 5 sesiones de validación, completar `docs/validacion/registro.csv`, correr `npm run validate:analyze` y construir el deck de E3 con las mediciones y los resultados.
+Completar las 5 sesiones de validación y las horas ejecutadas, actualizar las láminas C5 y C6 del deck, y preparar el informe E4 y la defensa E5. El deck y la evidencia de E3 ya están en el repositorio.
