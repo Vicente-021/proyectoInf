@@ -6,6 +6,15 @@ import { openDb, DEFAULT_DB_PATH } from './db.js';
 
 const SEED_URL = new URL('../data/seed.json', import.meta.url);
 
+function quantile(values, p) {
+  if (!values.length) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const index = (sorted.length - 1) * p;
+  const low = Math.floor(index);
+  const high = Math.ceil(index);
+  return low === high ? sorted[low] : sorted[low] + (sorted[high] - sorted[low]) * (index - low);
+}
+
 /**
  * Carga el seed en la base. Es idempotente: limpia las tablas y vuelve a insertar.
  * @param {import('node:sqlite').DatabaseSync} db
@@ -45,6 +54,12 @@ export function seedDatabase(db, data) {
     INSERT INTO alerts (client_id, meter_id, type, severity, message, ref_ts)
     VALUES (?, ?, ?, ?, ?, ?)
   `);
+  const insertAlertItem = db.prepare(`
+    INSERT INTO alert_items
+      (alert_id, meter_id, ts, kind, previous_value, value, delta,
+       next_ts, next_value, next_delta)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
 
   const demoHash = createHash('sha256').update('demo').digest('hex');
 
@@ -53,6 +68,7 @@ export function seedDatabase(db, data) {
     db.exec(`
       DELETE FROM consolidation_lines;
       DELETE FROM consolidations;
+      DELETE FROM alert_items;
       DELETE FROM alerts;
       DELETE FROM audit_events;
       DELETE FROM readings;
@@ -147,7 +163,7 @@ export function seedDatabase(db, data) {
       const present = datesByMeter.get(meter.id) ?? new Set();
       for (const ts of expectedDates) {
         if (!present.has(ts)) {
-          insertAlert.run(
+          const info = insertAlert.run(
             meter.client_id,
             meter.id,
             'missing_reading',
@@ -155,28 +171,81 @@ export function seedDatabase(db, data) {
             `Falta la lectura del medidor ${meter.id} para ${ts}.`,
             ts
           );
+          insertAlertItem.run(
+            Number(info.lastInsertRowid),
+            meter.id,
+            ts,
+            'missing',
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          );
         }
       }
     }
 
-    // Consistencia de la serie horaria: lecturas que hacen bajar el acumulado.
+    // Consistencia de la serie horaria: caídas y saltos sobre el umbral.
     const hourly = data.hourly_readings
       .filter((reading) => reading.meter_id === referenceMeter)
       .sort((a, b) => a.ts.localeCompare(b.ts));
-    const drops = hourly.reduce(
-      (count, reading, index) =>
-        index > 0 && reading.cum_kwh < hourly[index - 1].cum_kwh ? count + 1 : count,
-      0
-    );
-    if (drops > 0) {
-      insertAlert.run(
+    const deltas = [];
+    for (let index = 1; index < hourly.length; index++) {
+      deltas.push({
+        current: hourly[index],
+        previous: hourly[index - 1],
+        next: hourly[index + 1] ?? null,
+        delta: hourly[index].cum_kwh - hourly[index - 1].cum_kwh
+      });
+    }
+    const positiveDeltas = deltas.filter((item) => item.delta > 0).map((item) => item.delta);
+    const q1 = quantile(positiveDeltas, 0.25);
+    const q3 = quantile(positiveDeltas, 0.75);
+    const upper = q1 === null ? null : q3 + 1.5 * (q3 - q1);
+    const drops = deltas.filter((item) => item.delta < 0);
+    const jumps = upper === null ? [] : deltas.filter((item) => item.delta > upper);
+
+    if (drops.length || jumps.length) {
+      const info = insertAlert.run(
         data.meters[0].client_id,
         referenceMeter,
         'hourly_consistency',
         'warning',
-        `Se detectaron ${drops} lecturas horarias que disminuyen el acumulado.`,
+        `Se detectaron ${drops.length} caídas del acumulado y ${jumps.length} saltos sobre el umbral` +
+          (upper === null ? '.' : ` (${upper.toFixed(1)} kWh).`),
         null
       );
+      const alertId = Number(info.lastInsertRowid);
+      for (const item of drops) {
+        insertAlertItem.run(
+          alertId,
+          referenceMeter,
+          item.current.ts,
+          'negative_drop',
+          item.previous.cum_kwh,
+          item.current.cum_kwh,
+          item.delta,
+          item.next?.ts ?? null,
+          item.next?.cum_kwh ?? null,
+          item.next ? item.next.cum_kwh - item.current.cum_kwh : null
+        );
+      }
+      for (const item of jumps) {
+        insertAlertItem.run(
+          alertId,
+          referenceMeter,
+          item.current.ts,
+          'high_jump',
+          item.previous.cum_kwh,
+          item.current.cum_kwh,
+          item.delta,
+          item.next?.ts ?? null,
+          item.next?.cum_kwh ?? null,
+          item.next ? item.next.cum_kwh - item.current.cum_kwh : null
+        );
+      }
     }
 
     // Usuarios de demostración (contraseña: demo). No usar en producción.
@@ -204,7 +273,8 @@ export function seedDatabase(db, data) {
     contracts: data.contracts.length,
     dailyReadings: data.daily_readings.length,
     hourlyReadings: data.hourly_readings.length,
-    alerts: db.prepare('SELECT COUNT(*) AS n FROM alerts').get().n
+    alerts: db.prepare('SELECT COUNT(*) AS n FROM alerts').get().n,
+    alertItems: db.prepare('SELECT COUNT(*) AS n FROM alert_items').get().n
   };
 }
 
@@ -223,7 +293,7 @@ if (isMain) {
   console.log(`Base: ${DEFAULT_DB_PATH}`);
   console.log(
     `Cargado: ${result.clients} clientes, ${result.dailyReadings} lecturas diarias, ` +
-      `${result.hourlyReadings} horarias, ${result.alerts} alertas`
+      `${result.hourlyReadings} horarias, ${result.alerts} alertas, ${result.alertItems} ítems de alerta`
   );
   console.log(`Total diario en base: ${total.total} kWh`);
   console.log(`Referencia de la planilla: ${data.reference.total_kwh} kWh`);

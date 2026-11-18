@@ -229,7 +229,9 @@ function getAlerts(db, { status = 'open', clientId = null } = {}) {
   const where = conditions.length ? 'WHERE ' + conditions.join(' AND ') : '';
   return db
     .prepare(
-      `SELECT a.*, c.name AS client_name
+      `SELECT a.*, c.name AS client_name,
+              (SELECT COUNT(*) FROM alert_items i WHERE i.alert_id = a.id) AS items_total,
+              (SELECT COUNT(*) FROM alert_items i WHERE i.alert_id = a.id AND i.status = 'open') AS items_open
        FROM alerts a
        JOIN clients c ON c.id = a.client_id
        ${where}
@@ -238,6 +240,35 @@ function getAlerts(db, { status = 'open', clientId = null } = {}) {
                 a.id DESC`
     )
     .all(...params);
+}
+
+function getAlertDetail(db, alertId) {
+  const alert = db
+    .prepare(
+      `SELECT a.*, c.name AS client_name
+       FROM alerts a
+       JOIN clients c ON c.id = a.client_id
+       WHERE a.id = ?`
+    )
+    .get(alertId);
+  if (!alert) return null;
+
+  const items = db
+    .prepare('SELECT * FROM alert_items WHERE alert_id = ? ORDER BY ts')
+    .all(alertId);
+  const meter = alert.meter_id
+    ? db.prepare('SELECT * FROM meters WHERE id = ?').get(alert.meter_id)
+    : null;
+  const period = (alert.ref_ts ?? items[0]?.ts ?? '').slice(0, 7);
+  const consolidation = period
+    ? db
+        .prepare(
+          'SELECT * FROM consolidations WHERE client_id = ? AND period = ? ORDER BY id DESC LIMIT 1'
+        )
+        .get(alert.client_id, period) ?? null
+    : null;
+
+  return { ...alert, meter, items, consolidation };
 }
 
 async function handle(db, req, res) {
@@ -439,6 +470,13 @@ async function handle(db, req, res) {
     const status = url.searchParams.get('status') ?? 'open';
     const clientId = url.searchParams.get('client');
     return sendJson(res, 200, { alerts: getAlerts(db, { status, clientId }) });
+  }
+
+  const alertMatch = url.pathname.match(/^\/api\/alerts\/(\d+)$/);
+  if (method === 'GET' && alertMatch) {
+    const detail = getAlertDetail(db, Number(alertMatch[1]));
+    if (!detail) return sendError(res, 404, 'alerta no encontrada');
+    return sendJson(res, 200, detail);
   }
 
   if (method === 'GET' && url.pathname === '/api/audit') {
@@ -732,32 +770,47 @@ async function handle(db, req, res) {
       );
     }
 
-    db.prepare(
-      `INSERT INTO readings (meter_id, ts, kwh, source, kind, status, note)
-       VALUES (?, ?, ?, 'manual', 'daily', 'manual', ?)
-       ON CONFLICT (meter_id, ts, kind) DO UPDATE SET
-         kwh = excluded.kwh,
-         source = 'manual',
-         status = 'manual',
-         note = excluded.note`
-    ).run(meterId, ts, kwh, reason);
+    let resolved;
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      db.prepare(
+        `INSERT INTO readings (meter_id, ts, kwh, source, kind, status, note)
+         VALUES (?, ?, ?, 'manual', 'daily', 'manual', ?)
+         ON CONFLICT (meter_id, ts, kind) DO UPDATE SET
+           kwh = excluded.kwh,
+           source = 'manual',
+           status = 'manual',
+           note = excluded.note`
+      ).run(meterId, ts, kwh, reason);
 
-    const resolved = db
-      .prepare(
-        `UPDATE alerts
-         SET status = 'resolved', resolved_at = datetime('now')
-         WHERE meter_id = ? AND type = 'missing_reading' AND status = 'open' AND ref_ts = ?`
-      )
-      .run(meterId, ts);
+      db.prepare(
+        `UPDATE alert_items
+         SET status = 'corrected', corrected_value = ?, corrected_at = datetime('now'),
+             corrected_by = ?, note = ?
+         WHERE meter_id = ? AND ts = ? AND kind = 'missing' AND status = 'open'`
+      ).run(kwh, authUser.name, reason, meterId, ts);
 
-    audit(
-      db,
-      authUser,
-      'reading.manual',
-      'reading',
-      `${meterId}@${ts}`,
-      `${kwh} kWh. Motivo: ${reason}`
-    );
+      resolved = db
+        .prepare(
+          `UPDATE alerts
+           SET status = 'resolved', resolved_at = datetime('now')
+           WHERE meter_id = ? AND type = 'missing_reading' AND status = 'open' AND ref_ts = ?`
+        )
+        .run(meterId, ts);
+
+      audit(
+        db,
+        authUser,
+        'reading.manual',
+        'reading',
+        `${meterId}@${ts}`,
+        `${kwh} kWh. Motivo: ${reason}`
+      );
+      db.exec('COMMIT');
+    } catch (error) {
+      db.exec('ROLLBACK');
+      throw error;
+    }
 
     return sendJson(res, 201, {
       reading: db
@@ -765,6 +818,130 @@ async function handle(db, req, res) {
         .get(meterId, ts, 'daily'),
       resolvedAlerts: resolved.changes
     });
+  }
+
+  const correctAlertMatch = url.pathname.match(/^\/api\/alerts\/(\d+)\/correct$/);
+  if (method === 'POST' && correctAlertMatch) {
+    const authUser = requireUser(db, req, res, 'analista');
+    if (!authUser) return;
+    let body;
+    try {
+      body = await readJson(req);
+    } catch (error) {
+      return sendError(res, 400, error.message);
+    }
+
+    const id = Number(correctAlertMatch[1]);
+    const alert = db.prepare('SELECT * FROM alerts WHERE id = ?').get(id);
+    if (!alert) return sendError(res, 404, 'alerta no encontrada');
+    if (alert.status !== 'open') return sendError(res, 409, 'la alerta ya está resuelta');
+    if (!['missing_reading', 'hourly_consistency'].includes(alert.type)) {
+      return sendError(res, 400, 'esta alerta no admite corrección de una medición');
+    }
+
+    const reason = String(body.reason ?? '').trim();
+    if (reason.length < 5) {
+      return sendError(res, 400, 'el motivo de la corrección es obligatorio');
+    }
+    const value = toNumber(body.value);
+    if (!Number.isFinite(value)) {
+      return sendError(res, 400, 'el valor de la medición debe ser numérico');
+    }
+    if (alert.type === 'missing_reading' && value <= 0) {
+      return sendError(res, 400, 'la lectura debe ser mayor que 0');
+    }
+    if (alert.type === 'hourly_consistency' && value < 0) {
+      return sendError(res, 400, 'el acumulado debe ser mayor o igual que 0');
+    }
+
+    const ts =
+      alert.type === 'missing_reading'
+        ? alert.ref_ts
+        : String(body.ts ?? '').trim();
+    if (alert.type === 'missing_reading' && body.ts && String(body.ts) !== alert.ref_ts) {
+      return sendError(res, 400, 'la fecha no corresponde a la alerta');
+    }
+    if (!ts || !/^\d{4}-\d{2}-\d{2}( \d{2}:\d{2})?$/.test(ts)) {
+      return sendError(res, 400, 'la fecha de la medición no es válida');
+    }
+
+    const items = db.prepare('SELECT * FROM alert_items WHERE alert_id = ?').all(id);
+    const item =
+      alert.type === 'missing_reading'
+        ? items.find((candidate) => candidate.kind === 'missing')
+        : items.find(
+            (candidate) =>
+              candidate.ts === ts &&
+              candidate.status === 'open' &&
+              ['negative_drop', 'high_jump'].includes(candidate.kind)
+          );
+    if (!item) {
+      return sendError(res, 404, 'no se encontró la medición asociada a la alerta');
+    }
+
+    const period = ts.slice(0, 7);
+    const consolidation = db
+      .prepare(
+        'SELECT * FROM consolidations WHERE client_id = ? AND period = ? ORDER BY id DESC LIMIT 1'
+      )
+      .get(alert.client_id, period);
+    if (consolidation && consolidation.status !== 'borrador') {
+      return sendError(
+        res,
+        409,
+        `no se puede corregir una medición con la consolidación en estado ${consolidation.status}`
+      );
+    }
+
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      db.prepare(
+        `INSERT INTO readings (meter_id, ts, kwh, source, kind, status, note)
+         VALUES (?, ?, ?, 'manual', ?, 'manual', ?)
+         ON CONFLICT (meter_id, ts, kind) DO UPDATE SET
+           kwh = excluded.kwh,
+           source = 'manual',
+           status = 'manual',
+           note = excluded.note`
+      ).run(
+        alert.meter_id,
+        ts,
+        value,
+        alert.type === 'missing_reading' ? 'daily' : 'hourly',
+        reason
+      );
+
+      db.prepare(
+        `UPDATE alert_items
+         SET status = 'corrected', corrected_value = ?, corrected_at = datetime('now'),
+             corrected_by = ?, note = ?
+         WHERE id = ?`
+      ).run(value, authUser.name, reason, item.id);
+
+      const openItems = db
+        .prepare("SELECT COUNT(*) AS n FROM alert_items WHERE alert_id = ? AND status = 'open'")
+        .get(id).n;
+      if (openItems === 0) {
+        db.prepare(
+          "UPDATE alerts SET status = 'resolved', resolved_at = datetime('now') WHERE id = ?"
+        ).run(id);
+      }
+
+      audit(
+        db,
+        authUser,
+        'alert.corrected',
+        'alert',
+        id,
+        `${ts}: ${value}. Motivo: ${reason}`
+      );
+      db.exec('COMMIT');
+    } catch (error) {
+      db.exec('ROLLBACK');
+      throw error;
+    }
+
+    return sendJson(res, 200, getAlertDetail(db, id));
   }
 
   const resolveAlertMatch = url.pathname.match(/^\/api\/alerts\/(\d+)\/resolve$/);
@@ -790,10 +967,15 @@ async function handle(db, req, res) {
     }
 
     db.prepare(
+      `UPDATE alert_items
+       SET status = 'reviewed', note = ?, corrected_by = ?, corrected_at = datetime('now')
+       WHERE alert_id = ? AND status = 'open'`
+    ).run(note, authUser.name, id);
+    db.prepare(
       `UPDATE alerts SET status = 'resolved', resolved_at = datetime('now') WHERE id = ?`
     ).run(id);
     audit(db, authUser, 'alert.resolved', 'alert', id, note);
-    return sendJson(res, 200, db.prepare('SELECT * FROM alerts WHERE id = ?').get(id));
+    return sendJson(res, 200, getAlertDetail(db, id));
   }
 
   return sendError(res, 404, 'ruta no encontrada');

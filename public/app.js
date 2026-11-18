@@ -12,6 +12,10 @@ const state = {
   selectedConsolidationId: null,
   consolidationDetail: null,
   alertFilter: 'open',
+  alertDetail: null,
+  correctAlertId: null,
+  correctTs: null,
+  correctKind: null,
   rejectId: null,
   resolveId: null
 };
@@ -34,6 +38,11 @@ const ACTION_LABELS = {
 const TYPE_LABELS = {
   missing_reading: 'Lectura faltante',
   hourly_consistency: 'Consistencia horaria'
+};
+const SEVERITY_LABELS = {
+  critical: 'Crítica',
+  warning: 'Advertencia',
+  info: 'Info'
 };
 
 class ApiError extends Error {
@@ -232,11 +241,8 @@ function criticalAlertsFor(clientId) {
 }
 
 function alertAction(alert) {
-  if (alert.status !== 'open' || state.user?.role !== 'analista') return '';
-  if (alert.type === 'missing_reading') {
-    return `<button class="btn btn-sm btn-primary" type="button" data-manual data-meter="${esc(alert.meter_id)}" data-ts="${esc(alert.ref_ts)}">Ingresar lectura</button>`;
-  }
-  return `<button class="btn btn-sm" type="button" data-resolve="${alert.id}">Resolver</button>`;
+  if (alert.status !== 'open') return '';
+  return `<button class="btn btn-sm" type="button" data-alert="${alert.id}">Ver detalle</button>`;
 }
 
 function renderResumen() {
@@ -535,6 +541,7 @@ function renderAlertas() {
       <td>${esc(alert.client_name)}</td>
       <td><b>${esc(TYPE_LABELS[alert.type] ?? alert.type)}</b><br><span class="muted">${esc(alert.message)}</span></td>
       <td>${alert.ref_ts ? fmtDate(alert.ref_ts) : '—'}</td>
+      <td>${alert.items_open ?? '—'}/${alert.items_total ?? '—'}</td>
       <td>${alert.status === 'open' ? '<span class="badge badge-err">Abierta</span>' : '<span class="badge badge-ok">Resuelta</span>'}</td>
       <td>${alertAction(alert) || '—'}</td>
     </tr>`).join('');
@@ -542,10 +549,159 @@ function renderAlertas() {
   $('alertas-list').innerHTML = `
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Severidad</th><th>Cliente</th><th>Alerta</th><th>Referencia</th><th>Estado</th><th></th></tr></thead>
-        <tbody>${rows || '<tr><td colspan="6" class="empty">Sin alertas para el filtro.</td></tr>'}</tbody>
+        <thead><tr><th>Severidad</th><th>Cliente</th><th>Alerta</th><th>Referencia</th><th>Mediciones</th><th>Estado</th><th></th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="7" class="empty">Sin alertas para el filtro.</td></tr>'}</tbody>
       </table>
     </div>`;
+}
+
+function kindLabel(kind) {
+  const labels = {
+    missing: 'Lectura faltante',
+    negative_drop: 'Caída del acumulado',
+    high_jump: 'Salto sobre el umbral'
+  };
+  return labels[kind] ?? kind;
+}
+
+function itemStatusBadge(item) {
+  if (item.status === 'corrected') {
+    return `<span class="badge badge-ok">Corregida${item.corrected_value !== null && item.corrected_value !== undefined ? ` → ${fmtNum(item.corrected_value, 3)}` : ''}</span>`;
+  }
+  if (item.status === 'reviewed') {
+    return '<span class="badge badge-info">Revisada</span>';
+  }
+  return '<span class="badge badge-err">Abierta</span>';
+}
+
+async function openAlert(alertId) {
+  try {
+    state.alertDetail = await api(`/api/alerts/${alertId}`);
+    renderAlertModal();
+    $('dlg-alert').showModal();
+  } catch (error) {
+    toast(error.message, 'error');
+  }
+}
+
+function renderAlertModal() {
+  const detail = state.alertDetail;
+  if (!detail) return;
+
+  const canCorrect = state.user?.role === 'analista' && detail.status === 'open';
+  const openItems = detail.items.filter((item) => item.status === 'open').length;
+  $('alert-title').textContent = `${TYPE_LABELS[detail.type] ?? detail.type} · ${detail.client_name}`;
+  const consolidationText = detail.consolidation
+    ? ` · Consolidación: ${STATUS_LABELS[detail.consolidation.status] ?? detail.consolidation.status}`
+    : '';
+  $('alert-meta').textContent =
+    `${detail.meter?.id ?? '—'} · ${detail.ref_ts ? fmtDate(detail.ref_ts) : 'sin fecha de referencia'}` +
+    ` · ${SEVERITY_LABELS[detail.severity] ?? detail.severity}` +
+    ` · ${detail.status === 'resolved' ? 'Resuelta' : 'Abierta'}${consolidationText}`;
+
+  const bannerClass = detail.status === 'resolved'
+    ? 'ok-banner'
+    : detail.severity === 'critical'
+      ? 'alert-banner'
+      : 'warn-banner';
+  $('alert-message').innerHTML = `<div class="${bannerClass}">${esc(detail.message)}</div>`;
+
+  const rows = detail.items.map((item) => {
+    const isMissing = item.kind === 'missing';
+    const action = canCorrect && item.status === 'open'
+      ? `<button class="btn btn-sm ${isMissing ? 'btn-primary' : ''}" type="button"
+           data-correct-alert="${detail.id}"
+           data-ts="${esc(item.ts)}"
+           data-kind="${esc(item.kind)}"
+           data-value="${item.value ?? ''}">${isMissing ? 'Registrar lectura' : 'Corregir'}</button>`
+      : '—';
+    return `
+      <tr>
+        <td><b>${esc(kindLabel(item.kind))}</b><br>${fmtDate(item.ts)}</td>
+        <td class="num">${isMissing || item.previous_value === null ? '—' : fmtNum(item.previous_value, 3)}</td>
+        <td class="num">${isMissing || item.value === null ? '—' : fmtNum(item.value, 3)}</td>
+        <td class="num">${item.delta === null ? '—' : fmtNum(item.delta, 3)}</td>
+        <td>${item.next_ts ? `${fmtDate(item.next_ts)}<br><span class="muted">${fmtNum(item.next_value, 3)} (${fmtNum(item.next_delta, 3)})</span>` : '—'}</td>
+        <td>${itemStatusBadge(item)}</td>
+        <td>${action}</td>
+      </tr>`;
+  }).join('');
+
+  $('alert-items').innerHTML = detail.items.length
+    ? `<table>
+        <thead><tr><th>Medición</th><th class="num">Anterior</th><th class="num">Valor</th><th class="num">Delta</th><th>Siguiente</th><th>Estado</th><th></th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`
+    : '<p class="empty">Sin mediciones asociadas a la alerta.</p>';
+
+  const showResolve = canCorrect && detail.type !== 'missing_reading' && openItems > 0;
+  $('alert-resolve-note').classList.toggle('hidden', !showResolve);
+  $('alert-resolve-note').textContent = detail.type === 'hourly_consistency'
+    ? 'Revisar serie y resolver con nota'
+    : 'Resolver con nota';
+}
+
+function openCorrect(alertId, ts, kind, value) {
+  state.correctAlertId = Number(alertId);
+  state.correctTs = ts;
+  state.correctKind = kind;
+  const detail = state.alertDetail;
+  $('correct-title').textContent = kind === 'missing'
+    ? 'Registrar lectura faltante'
+    : 'Corregir medición';
+  $('correct-meta').textContent =
+    `${detail?.meter?.id ?? '—'} · ${fmtDate(ts)} · ${kindLabel(kind)}`;
+  $('correct-value').value = kind === 'missing' ? '' : (value ?? '');
+  $('correct-reason').value = '';
+  $('correct-error').classList.add('hidden');
+  $('dlg-correct').showModal();
+  $('correct-value').focus();
+}
+
+async function saveCorrect() {
+  const error = $('correct-error');
+  const value = parseNumber($('correct-value').value);
+  const reason = $('correct-reason').value.trim();
+
+  if (!Number.isFinite(value)) {
+    error.textContent = 'Ingresa un valor numérico.';
+    error.classList.remove('hidden');
+    return;
+  }
+  if (state.correctKind === 'missing' && value <= 0) {
+    error.textContent = 'La lectura debe ser mayor que 0.';
+    error.classList.remove('hidden');
+    return;
+  }
+  if (reason.length < 5) {
+    error.textContent = 'Escribe el motivo de la corrección (mínimo 5 caracteres).';
+    error.classList.remove('hidden');
+    return;
+  }
+
+  try {
+    const detail = await api(`/api/alerts/${state.correctAlertId}/correct`, {
+      method: 'POST',
+      body: JSON.stringify({ ts: state.correctTs, value, reason })
+    });
+    $('dlg-correct').close();
+    state.alertDetail = detail;
+    const openItems = detail.items.filter((item) => item.status === 'open').length;
+    toast(
+      detail.status === 'resolved'
+        ? 'Alerta resuelta con la corrección'
+        : `Corrección guardada; quedan ${openItems} mediciones por revisar`
+    );
+    await loadAll();
+    if (detail.status === 'resolved') {
+      $('dlg-alert').close();
+    } else {
+      renderAlertModal();
+    }
+  } catch (err) {
+    error.textContent = err.message;
+    error.classList.remove('hidden');
+  }
 }
 
 function renderAuditoria() {
@@ -714,6 +870,7 @@ async function saveManual() {
 
 function openResolve(alertId) {
   state.resolveId = Number(alertId);
+  if ($('dlg-alert').open) $('dlg-alert').close();
   $('resolve-note').value = '';
   $('resolve-error').classList.add('hidden');
   $('dlg-resolve').showModal();
@@ -734,6 +891,7 @@ async function saveResolve() {
       body: JSON.stringify({ note })
     });
     $('dlg-resolve').close();
+    $('dlg-alert').close();
     toast('Alerta resuelta');
     await loadAll();
   } catch (err) {
@@ -828,11 +986,32 @@ function bindEvents() {
   $('manual-save').addEventListener('click', saveManual);
   $('reject-save').addEventListener('click', saveReject);
   $('resolve-save').addEventListener('click', saveResolve);
+  $('correct-save').addEventListener('click', saveCorrect);
+  $('alert-resolve-note').addEventListener('click', () => {
+    if (state.alertDetail) openResolve(state.alertDetail.id);
+  });
 
   document.addEventListener('click', (event) => {
     const go = event.target.closest('[data-go]');
     if (go) {
       showView(go.dataset.go);
+      return;
+    }
+
+    const alert = event.target.closest('[data-alert]');
+    if (alert) {
+      openAlert(alert.dataset.alert);
+      return;
+    }
+
+    const correct = event.target.closest('[data-correct-alert]');
+    if (correct) {
+      openCorrect(
+        correct.dataset.correctAlert,
+        correct.dataset.ts,
+        correct.dataset.kind,
+        correct.dataset.value
+      );
       return;
     }
 

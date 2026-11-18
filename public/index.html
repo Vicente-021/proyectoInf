@@ -299,6 +299,31 @@
     </form>
   </dialog>
 
+  <dialog id="dlg-alert">
+    <h3 id="alert-title">Detalle de la alerta</h3>
+    <p class="muted" id="alert-meta">—</p>
+    <div id="alert-message"></div>
+    <div id="alert-items" class="table-wrap scroll"></div>
+    <div class="dialog-actions">
+      <button class="btn" type="button" data-close="dlg-alert">Cerrar</button>
+      <button class="btn btn-primary hidden" id="alert-resolve-note" type="button">Resolver con nota</button>
+    </div>
+  </dialog>
+
+  <dialog id="dlg-correct">
+    <h3 id="correct-title">Corregir medición</h3>
+    <p class="muted" id="correct-meta">—</p>
+    <label for="correct-value">Valor corregido (kWh)</label>
+    <input id="correct-value" type="text" inputmode="decimal">
+    <label for="correct-reason">Motivo de la corrección</label>
+    <textarea id="correct-reason" placeholder="Ej.: el acumulado se reinició; se corrige con el valor del registro en terreno"></textarea>
+    <div id="correct-error" class="form-error hidden"></div>
+    <div class="dialog-actions">
+      <button class="btn" type="button" data-close="dlg-correct">Cancelar</button>
+      <button class="btn btn-primary" id="correct-save" type="button">Guardar corrección</button>
+    </div>
+  </dialog>
+
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
   <script type="module" src="/app.js"></script>

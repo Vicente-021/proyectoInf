@@ -34,7 +34,7 @@
 ## Guion de la demo (1:45)
 
 1. **Analista** → **Alertas** → alerta del Cliente B.
-2. **Ingresar lectura** → fecha `2026-05-15`, valor `700,5`, motivo «medidor sin señal; valor tomado en terreno» → guardar.
+2. **Ver detalle** de la alerta → revisar la medición faltante → **Registrar lectura** `2026-05-15`, valor `700,5`, motivo «medidor sin señal; valor tomado en terreno» → guardar.
 3. **Consolidación** → Cliente B → **Generar consolidación**.
 4. Mostrar totales y una línea: kWh, precio, tipo de cambio, factor, monto.
 5. **Enviar a revisión**.
@@ -46,7 +46,7 @@
 
 - No improvisar más de 30 segundos.
 - Pasar a la lámina de respaldo 20 (captura de consolidación).
-- Explicar que el flujo está cubierto por 33 pruebas y por la evidencia de `docs/rnf.md`.
+- Explicar que el flujo está cubierto por 36 pruebas y por la evidencia de `docs/rnf.md`.
 - Continuar con C3.
 
 ## Preguntas: quién responde

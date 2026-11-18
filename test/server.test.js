@@ -406,6 +406,105 @@ test('una alerta de lectura faltante no se resuelve sin ingreso manual', async (
   assert.equal(response.status, 409);
 });
 
+test('la alerta de B muestra la medición faltante y se corrige con un valor', async (t) => {
+  const { base } = await withServer(t);
+  const analyst = await login(base, 'u-analista');
+
+  const list = await api(base, '/api/alerts?status=open', { cookie: analyst }).then((r) => r.json());
+  const alert = list.alerts.find((item) => item.client_id === 'CLI-B');
+  assert.equal(alert.items_total, 1);
+  assert.equal(alert.items_open, 1);
+
+  const detail = await api(base, `/api/alerts/${alert.id}`, { cookie: analyst }).then((r) => r.json());
+  assert.equal(detail.items.length, 1);
+  assert.equal(detail.items[0].kind, 'missing');
+  assert.equal(detail.items[0].value, null);
+
+  const corrected = await api(base, `/api/alerts/${alert.id}/correct`, {
+    method: 'POST',
+    cookie: analyst,
+    body: {
+      ts: '2026-05-15',
+      value: 700.5,
+      reason: 'Medidor sin señal; valor tomado en terreno'
+    }
+  });
+  assert.equal(corrected.status, 200);
+  const body = await corrected.json();
+  assert.equal(body.status, 'resolved');
+  assert.equal(body.items[0].status, 'corrected');
+  assert.equal(body.items[0].corrected_value, 700.5);
+
+  const readings = await api(base, '/api/readings?kind=daily&meter=M-01&limit=100', {
+    cookie: analyst
+  }).then((r) => r.json());
+  const manual = readings.readings.find((item) => item.ts === '2026-05-15');
+  assert.equal(manual.kwh, 700.5);
+  assert.equal(manual.status, 'manual');
+});
+
+test('la alerta horaria lista sus mediciones y permite corregir una', async (t) => {
+  const { base } = await withServer(t);
+  const analyst = await login(base, 'u-analista');
+
+  const list = await api(base, '/api/alerts?status=open', { cookie: analyst }).then((r) => r.json());
+  const alert = list.alerts.find((item) => item.type === 'hourly_consistency');
+  assert.equal(alert.items_total, 25);
+  assert.equal(alert.items_open, 25);
+
+  const detail = await api(base, `/api/alerts/${alert.id}`, { cookie: analyst }).then((r) => r.json());
+  assert.equal(detail.items.length, 25);
+
+  const item = detail.items.find((candidate) => candidate.status === 'open');
+  const corrected = await api(base, `/api/alerts/${alert.id}/correct`, {
+    method: 'POST',
+    cookie: analyst,
+    body: {
+      ts: item.ts,
+      value: Number(item.value) + 1,
+      reason: 'Ajuste de prueba sobre el acumulado'
+    }
+  });
+  assert.equal(corrected.status, 200);
+  const body = await corrected.json();
+  assert.equal(body.status, 'open');
+  const changed = body.items.find((candidate) => candidate.ts === item.ts);
+  assert.equal(changed.status, 'corrected');
+  assert.equal(body.items.filter((candidate) => candidate.status === 'open').length, 24);
+});
+
+test('corregir una alerta exige analista, motivo y una medición válida', async (t) => {
+  const { base } = await withServer(t);
+  const analyst = await login(base, 'u-analista');
+  const approver = await login(base, 'u-aprobador');
+
+  const list = await api(base, '/api/alerts?status=open&client=CLI-B', {
+    cookie: analyst
+  }).then((r) => r.json());
+  const alert = list.alerts[0];
+
+  const forbidden = await api(base, `/api/alerts/${alert.id}/correct`, {
+    method: 'POST',
+    cookie: approver,
+    body: { value: 700, reason: 'Intento de aprobador' }
+  });
+  assert.equal(forbidden.status, 403);
+
+  const noReason = await api(base, `/api/alerts/${alert.id}/correct`, {
+    method: 'POST',
+    cookie: analyst,
+    body: { value: 700 }
+  });
+  assert.equal(noReason.status, 400);
+
+  const badDate = await api(base, `/api/alerts/${alert.id}/correct`, {
+    method: 'POST',
+    cookie: analyst,
+    body: { ts: '2026-05-14', value: 700, reason: 'Fecha que no corresponde' }
+  });
+  assert.equal(badDate.status, 400);
+});
+
 test('la ficha del cliente devuelve resumen, alertas y consolidación', async (t) => {
   const { base } = await withServer(t);
   const cookie = await login(base, 'u-analista');
@@ -440,6 +539,8 @@ test('una alerta de consistencia se resuelve con una nota', async (t) => {
   assert.equal(response.status, 200);
   const body = await response.json();
   assert.equal(body.status, 'resolved');
+  assert.ok(body.items.length > 0);
+  assert.ok(body.items.every((item) => item.status === 'reviewed'));
 
   const again = await api(base, `/api/alerts/${alerts.alerts[0].id}/resolve`, {
     method: 'POST',

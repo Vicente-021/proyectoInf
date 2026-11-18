@@ -21,8 +21,8 @@
 El participante debe:
 
 1. Entrar como `u-analista`.
-2. Ir a **Alertas** y encontrar la alerta crítica del Cliente B.
-3. Registrar la lectura manual del `2026-05-15` con un motivo.
+2. Ir a **Alertas**, abrir la alerta crítica del Cliente B y revisar la medición afectada.
+3. Corregir la lectura del `2026-05-15` con un motivo desde el detalle de la alerta.
 4. Ir a **Consolidación**, seleccionar Cliente B y generar la consolidación.
 5. Enviarla a revisión.
 6. Cerrar sesión, entrar como `u-aprobador` y aprobar la consolidación.

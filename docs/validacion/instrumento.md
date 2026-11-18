@@ -27,7 +27,7 @@
 > «Vas a cerrar el período del **Cliente B**.
 >
 > 1. Entra con el usuario **analista**.
-> 2. Busca la alerta del Cliente B y registra la lectura que falta, con un motivo.
+> 2. Abre la alerta del Cliente B, revisa la medición afectada y corrige el valor que falta, con un motivo.
 > 3. Genera la consolidación del período.
 > 4. Envíala a revisión.
 > 5. Cierra sesión, entra como **aprobador** y aprueba la consolidación.

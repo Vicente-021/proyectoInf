@@ -13,7 +13,7 @@ Incluye el flujo de negocio completo: ingesta, cálculo, consolidación, revisi�
 ```bash
 npm run seed     # crea data/svdm.db y carga el seed
 npm start        # interfaz en http://localhost:3000 y API
-npm test         # 33 pruebas
+npm test         # 36 pruebas
 npm run coverage # cobertura con la herramienta integrada de Node
 ```
 
@@ -27,7 +27,7 @@ npm run coverage # cobertura con la herramienta integrada de Node
 - **Resumen**: KPIs, consumo por cliente, estado del cierre, fuentes y actividad.
 - **Consolidación**: generar, ver líneas, enviar a revisión, aprobar o rechazar.
 - **Clientes**: cartera y ficha por cliente con contrato, lecturas y alertas.
-- **Alertas**: filtro por estado, ingreso manual y resolución con nota.
+- **Alertas**: detalle de las mediciones afectadas, corrección del valor con motivo y resolución con nota.
 - **Auditoría**: historial de acciones.
 
 La interfaz usa la misma sesión por cookie que la API; no hay datos en memoria del navegador: todo se lee y escribe en SQLite.
@@ -74,8 +74,8 @@ Notas de procedencia:
 ## Flujo de demostración
 
 1. Login como `u-analista`.
-2. Ver la alerta crítica del Cliente B (lectura faltante del `2026-05-15`).
-3. Ingresar la lectura manual con un motivo.
+2. Abrir la alerta crítica del Cliente B (lectura faltante del `2026-05-15`) y revisar la medición afectada.
+3. Corregir el valor desde el detalle de la alerta, con un motivo.
 4. Generar la consolidación del período.
 5. Enviarla a revisión.
 6. Login como `u-aprobador` y aprobar o rechazar con motivo.
@@ -102,8 +102,10 @@ Notas de procedencia:
 | GET | `/api/clients` | sesión | Cartera con totales y alertas |
 | GET | `/api/clients/:id?period=2026-05` | sesión | Ficha del cliente |
 | GET | `/api/readings?kind=daily&meter=M-01` | sesión | Lecturas |
-| GET | `/api/alerts?status=open&client=CLI-B` | sesión | Alertas |
-| POST | `/api/alerts/:id/resolve` | analista | Resuelve alerta con nota |
+| GET | `/api/alerts?status=open&client=CLI-B` | sesión | Alertas con conteo de mediciones afectadas |
+| GET | `/api/alerts/:id` | sesión | Detalle con las mediciones afectadas |
+| POST | `/api/alerts/:id/correct` | analista | `{ ts, value, reason }`; corrige la medición |
+| POST | `/api/alerts/:id/resolve` | analista | Resuelve una alerta revisada con nota |
 | GET | `/api/consolidations?period=2026-05` | sesión | Lista de consolidaciones |
 | GET | `/api/consolidations/:id` | sesión | Detalle con líneas |
 | POST | `/api/consolidations` | analista | `{ client_id, period }` |
@@ -134,8 +136,8 @@ El monto se redondea por línea a 2 decimales y el total es la suma de las líne
 
 ## Pruebas y cobertura
 
-- **33 pruebas**: cálculo, seed, autenticación, permisos, máquina de estados, inmutabilidad, alertas, API e interfaz estática.
-- **92,74 %** de cobertura de línea (servidor: 91,81 %).
+- **36 pruebas**: cálculo, seed, autenticación, permisos, máquina de estados, inmutabilidad, alertas, API e interfaz estática.
+- **92,38 %** de cobertura de línea (servidor: 90,71 %).
 
 ## Evidencia de RNF
 
@@ -153,14 +155,14 @@ Resultados principales de la última corrida:
 
 | RNF | Resultado |
 |---|---|
-| Consolidación mensual (R-1) | p95 **3,17 ms** con 30 líneas; **5,26 ms** con 450.083 filas |
-| Ingesta (R-2) | mediana **9,31 ms** para 840 lecturas |
-| Volumen 5 años (R-3) | **450.083 filas**, 71 MB, sin degradar la consolidación |
+| Consolidación mensual (R-1) | p95 **3,9 ms** con 30 líneas; **5,77 ms** con 450.083 filas |
+| Ingesta (R-2) | mediana **10,9 ms** para 840 lecturas |
+| Volumen 5 años (R-3) | **450.083 filas**, 71,1 MB, sin degradar la consolidación |
 | Exactitud (E-1) | **0 líneas** fuera de tolerancia; diferencia total **0,004409 CLP** |
 | Integridad (E-2) | **0 duplicados** antes y después de recargar |
 | RBAC (S-2) | **8/8** controles rol × acción |
 | Auditoría (S-4) | **4/4** acciones críticas registradas |
-| Cobertura (M-1) | global **92,74 %**; cálculo **92,38 %** |
+| Cobertura (M-1) | global **92,38 %**; cálculo **92,38 %** |
 
 Los RNF que dependen de infraestructura o de usuarios (MFA, TLS, RPO/RTO, WCAG, validación) quedan declarados como parciales o pendientes en `docs/rnf.md`.
 

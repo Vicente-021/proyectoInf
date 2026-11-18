@@ -59,6 +59,12 @@ test('el seed marca la lectura faltante de B y la inconsistencia horaria de A', 
   assert.equal(consistency.client_id, 'CLI-A');
   assert.equal(consistency.severity, 'warning');
 
+  const items = db.prepare('SELECT * FROM alert_items ORDER BY id').all();
+  assert.equal(items.length, 26);
+  assert.equal(items.filter((item) => item.kind === 'missing').length, 1);
+  assert.equal(items.filter((item) => item.kind === 'negative_drop').length, 12);
+  assert.equal(items.filter((item) => item.kind === 'high_jump').length, 13);
+
   db.close();
 });
 

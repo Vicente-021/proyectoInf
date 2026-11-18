@@ -126,6 +126,29 @@ export function migrate(db) {
       resolved_at TEXT
     );
 
+    CREATE TABLE IF NOT EXISTS alert_items (
+      id              INTEGER PRIMARY KEY AUTOINCREMENT,
+      alert_id        INTEGER NOT NULL REFERENCES alerts(id) ON DELETE CASCADE,
+      meter_id        TEXT NOT NULL REFERENCES meters(id),
+      ts              TEXT NOT NULL,
+      kind            TEXT NOT NULL CHECK (kind IN ('missing', 'negative_drop', 'high_jump')),
+      previous_value  REAL,
+      value           REAL,
+      delta           REAL,
+      next_ts         TEXT,
+      next_value      REAL,
+      next_delta      REAL,
+      status          TEXT NOT NULL DEFAULT 'open'
+                      CHECK (status IN ('open', 'corrected', 'reviewed')),
+      corrected_value REAL,
+      corrected_at    TEXT,
+      corrected_by    TEXT,
+      note            TEXT
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_alert_items_alert ON alert_items (alert_id);
+    CREATE INDEX IF NOT EXISTS idx_alert_items_meter_ts ON alert_items (meter_id, ts);
+
     CREATE TABLE IF NOT EXISTS audit_events (
       id         INTEGER PRIMARY KEY AUTOINCREMENT,
       actor      TEXT NOT NULL,
