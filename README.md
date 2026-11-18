@@ -13,7 +13,7 @@ Incluye el flujo de negocio completo: ingesta, cálculo, consolidación, revisi�
 ```bash
 npm run seed     # crea data/svdm.db y carga el seed
 npm start        # interfaz en http://localhost:3000 y API
-npm test         # 36 pruebas
+npm test         # 37 pruebas
 npm run coverage # cobertura con la herramienta integrada de Node
 ```
 
@@ -57,9 +57,11 @@ La sesión usa una cookie `HttpOnly` y dura 8 horas. El hash es SHA-256 **solo p
 ## Datos
 
 - **Cliente A**: dato real anonimizado, base de la prueba de concepto.
-- **Clientes B y C**: cartera sintética derivada de A, marcada con `synthetic = 1`.
-- **89 lecturas diarias** y **751 horarias**.
-- El Cliente B tiene **una lectura faltante** (`2026-05-15`) para demostrar el ingreso manual.
+- **Clientes B, C y D**: cartera sintética derivada de A, marcada con `synthetic = 1`.
+- **118 lecturas diarias** y **751 horarias**.
+- El Cliente B tiene una lectura faltante (`2026-05-15`).
+- El Cliente D tiene una lectura faltante (`2026-05-12`) y dos consumos diarios atípicos.
+- El Cliente A tiene la alerta horaria de consistencia y un consumo diario atípico; B y C también tienen outliers diarios detectados por Tukey.
 - Referencia del Cliente A:
   - consumo: **30.811,227520 kWh**;
   - gas equivalente: **34.079,6 L**;
@@ -84,9 +86,9 @@ Notas de procedencia:
 ## Reglas implementadas
 
 - Una **alerta crítica abierta** impide enviar a revisión y aprobar.
-- Una consolidación **aprobada es inmutable**: no se recalcula ni admite ingreso manual.
+- Una consolidación **aprobada es inmutable**: no se recalcula ni admite ingreso manual o corrección.
 - El **rechazo exige motivo** y devuelve la consolidación a borrador.
-- El **ingreso manual exige motivo** y resuelve la alerta de lectura faltante del medidor y fecha.
+- El **ingreso manual o la corrección de una alerta exigen motivo**; la alerta se resuelve cuando no quedan mediciones abiertas.
 - Cada acción de escritura deja un evento en `audit_events` con actor, rol, acción y detalle.
 - Los roles se validan en el servidor: el analista no aprueba y el aprobador no genera.
 
@@ -136,8 +138,8 @@ El monto se redondea por línea a 2 decimales y el total es la suma de las líne
 
 ## Pruebas y cobertura
 
-- **36 pruebas**: cálculo, seed, autenticación, permisos, máquina de estados, inmutabilidad, alertas, API e interfaz estática.
-- **92,38 %** de cobertura de línea (servidor: 90,71 %).
+- **37 pruebas**: cálculo, seed, autenticación, permisos, máquina de estados, inmutabilidad, alertas, API e interfaz estática.
+- **91,33 %** de cobertura de línea (servidor: 90,71 %).
 
 ## Evidencia de RNF
 
@@ -155,14 +157,14 @@ Resultados principales de la última corrida:
 
 | RNF | Resultado |
 |---|---|
-| Consolidación mensual (R-1) | p95 **3,9 ms** con 30 líneas; **5,77 ms** con 450.083 filas |
-| Ingesta (R-2) | mediana **10,9 ms** para 840 lecturas |
-| Volumen 5 años (R-3) | **450.083 filas**, 71,1 MB, sin degradar la consolidación |
+| Consolidación mensual (R-1) | p95 **4,55 ms** con 30 líneas; **5,1 ms** con 450.112 filas |
+| Ingesta (R-2) | mediana **9,52 ms** para 869 lecturas |
+| Volumen 5 años (R-3) | **450.112 filas**, 71,0 MB, sin degradar la consolidación |
 | Exactitud (E-1) | **0 líneas** fuera de tolerancia; diferencia total **0,004409 CLP** |
 | Integridad (E-2) | **0 duplicados** antes y después de recargar |
 | RBAC (S-2) | **8/8** controles rol × acción |
 | Auditoría (S-4) | **4/4** acciones críticas registradas |
-| Cobertura (M-1) | global **92,38 %**; cálculo **92,38 %** |
+| Cobertura (M-1) | global **91,33 %**; cálculo **92,38 %** |
 
 Los RNF que dependen de infraestructura o de usuarios (MFA, TLS, RPO/RTO, WCAG, validación) quedan declarados como parciales o pendientes en `docs/rnf.md`.
 

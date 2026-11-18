@@ -18,9 +18,9 @@ function freshDb() {
 test('el seed carga la cartera, contratos, precios y lecturas', () => {
   const db = freshDb();
 
-  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM clients').get().n, 3);
-  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM meters').get().n, 3);
-  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM contracts').get().n, 3);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM clients').get().n, 4);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM meters').get().n, 4);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM contracts').get().n, 4);
   assert.equal(db.prepare('SELECT COUNT(*) AS n FROM prices').get().n, 1);
   assert.equal(
     db.prepare("SELECT COUNT(*) AS n FROM readings WHERE kind = 'daily'").get().n,
@@ -38,7 +38,8 @@ test('el seed carga la cartera, contratos, precios y lecturas', () => {
   assert.deepEqual(synthetic, [
     ['CLI-A', 0],
     ['CLI-B', 1],
-    ['CLI-C', 1]
+    ['CLI-C', 1],
+    ['CLI-D', 1]
   ]);
 
   db.close();
@@ -48,7 +49,7 @@ test('el seed marca la lectura faltante de B y la inconsistencia horaria de A', 
   const db = freshDb();
   const alerts = db.prepare('SELECT * FROM alerts ORDER BY id').all();
 
-  assert.equal(alerts.length, 2);
+  assert.equal(alerts.length, 7);
   const missing = alerts.find((alert) => alert.type === 'missing_reading');
   const consistency = alerts.find((alert) => alert.type === 'hourly_consistency');
 
@@ -60,10 +61,11 @@ test('el seed marca la lectura faltante de B y la inconsistencia horaria de A', 
   assert.equal(consistency.severity, 'warning');
 
   const items = db.prepare('SELECT * FROM alert_items ORDER BY id').all();
-  assert.equal(items.length, 26);
-  assert.equal(items.filter((item) => item.kind === 'missing').length, 1);
+  assert.equal(items.length, 32);
+  assert.equal(items.filter((item) => item.kind === 'missing').length, 2);
   assert.equal(items.filter((item) => item.kind === 'negative_drop').length, 12);
   assert.equal(items.filter((item) => item.kind === 'high_jump').length, 13);
+  assert.equal(items.filter((item) => item.kind === 'outlier').length, 5);
 
   db.close();
 });
@@ -74,7 +76,7 @@ test('el seed es idempotente', () => {
 
   assert.equal(
     db.prepare("SELECT COUNT(*) AS n FROM readings WHERE kind = 'daily'").get().n,
-    89
+    118
   );
   assert.equal(
     db.prepare("SELECT COUNT(*) AS n FROM readings WHERE kind = 'hourly'").get().n,

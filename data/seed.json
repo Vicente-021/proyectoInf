@@ -1,7 +1,7 @@
 {
   "meta": {
     "source": "ENERGIA CALBUCO JUN 2026.xlsx",
-    "generated_at": "2026-11-16T19:49:54",
+    "generated_at": "2026-11-17T21:27:34",
     "period": "2026-05",
     "invoice_month": "2026-06",
     "anonymized": true,
@@ -9,7 +9,7 @@
       "CLI-B",
       "CLI-C"
     ],
-    "notes": "Lecturas diarias del período 2026-05-01 a 2026-05-30. La serie horaria (EESS) cubre 2026-05-30 17:00 a 2026-06-30 23:00. El cliente A y su contacto fueron anonimizados. Los clientes B y C son sintéticos y derivan de A para la demostración."
+    "notes": "Lecturas diarias del período 2026-05-01 a 2026-05-30. La serie horaria (EESS) cubre 2026-05-30 17:00 a 2026-06-30 23:00. El cliente A y su contacto fueron anonimizados. Los clientes B, C y D son sintéticos y derivan de A para la demostración."
   },
   "clients": [
     {
@@ -28,6 +28,12 @@
       "id": "CLI-C",
       "name": "Cliente C",
       "contact": "contacto@cliente-c.cl",
+      "synthetic": true
+    },
+    {
+      "id": "CLI-D",
+      "name": "Cliente D",
+      "contact": "contacto@cliente-d.cl",
       "synthetic": true
     }
   ],
@@ -48,6 +54,12 @@
       "id": "M-02",
       "client_id": "CLI-C",
       "barge": "Barcaza 1",
+      "source": "eGauge"
+    },
+    {
+      "id": "M-06",
+      "client_id": "CLI-D",
+      "barge": "Barcaza 3",
       "source": "eGauge"
     }
   ],
@@ -74,6 +86,15 @@
       "id": "CT-2026-010",
       "client_id": "CLI-C",
       "factor_l_per_kwh": 1.04,
+      "price_usd_per_kwh": 0.74232,
+      "exchange_rate": 918.378,
+      "valid_from": "2026-05-01",
+      "valid_to": "2026-12-31"
+    },
+    {
+      "id": "CT-2026-021",
+      "client_id": "CLI-D",
+      "factor_l_per_kwh": 1.12,
       "price_usd_per_kwh": 0.74232,
       "exchange_rate": 918.378,
       "valid_from": "2026-05-01",
@@ -533,6 +554,151 @@
       "meter_id": "M-02",
       "ts": "2026-05-30",
       "kwh": 447.82
+    },
+    {
+      "meter_id": "M-06",
+      "ts": "2026-05-01",
+      "kwh": 520.577
+    },
+    {
+      "meter_id": "M-06",
+      "ts": "2026-05-02",
+      "kwh": 263.517
+    },
+    {
+      "meter_id": "M-06",
+      "ts": "2026-05-03",
+      "kwh": 586.465
+    },
+    {
+      "meter_id": "M-06",
+      "ts": "2026-05-04",
+      "kwh": 537.255
+    },
+    {
+      "meter_id": "M-06",
+      "ts": "2026-05-05",
+      "kwh": 582.659
+    },
+    {
+      "meter_id": "M-06",
+      "ts": "2026-05-06",
+      "kwh": 550.628
+    },
+    {
+      "meter_id": "M-06",
+      "ts": "2026-05-07",
+      "kwh": 525.737
+    },
+    {
+      "meter_id": "M-06",
+      "ts": "2026-05-08",
+      "kwh": 546.733
+    },
+    {
+      "meter_id": "M-06",
+      "ts": "2026-05-09",
+      "kwh": 554.862
+    },
+    {
+      "meter_id": "M-06",
+      "ts": "2026-05-10",
+      "kwh": 613.163
+    },
+    {
+      "meter_id": "M-06",
+      "ts": "2026-05-11",
+      "kwh": 598.718
+    },
+    {
+      "meter_id": "M-06",
+      "ts": "2026-05-13",
+      "kwh": 592.608
+    },
+    {
+      "meter_id": "M-06",
+      "ts": "2026-05-14",
+      "kwh": 603.182
+    },
+    {
+      "meter_id": "M-06",
+      "ts": "2026-05-15",
+      "kwh": 600.59
+    },
+    {
+      "meter_id": "M-06",
+      "ts": "2026-05-16",
+      "kwh": 647.433
+    },
+    {
+      "meter_id": "M-06",
+      "ts": "2026-05-17",
+      "kwh": 591.85
+    },
+    {
+      "meter_id": "M-06",
+      "ts": "2026-05-18",
+      "kwh": 605.777
+    },
+    {
+      "meter_id": "M-06",
+      "ts": "2026-05-19",
+      "kwh": 579.1
+    },
+    {
+      "meter_id": "M-06",
+      "ts": "2026-05-20",
+      "kwh": 586.669
+    },
+    {
+      "meter_id": "M-06",
+      "ts": "2026-05-21",
+      "kwh": 589.726
+    },
+    {
+      "meter_id": "M-06",
+      "ts": "2026-05-22",
+      "kwh": 1800.404
+    },
+    {
+      "meter_id": "M-06",
+      "ts": "2026-05-23",
+      "kwh": 619.536
+    },
+    {
+      "meter_id": "M-06",
+      "ts": "2026-05-24",
+      "kwh": 579.348
+    },
+    {
+      "meter_id": "M-06",
+      "ts": "2026-05-25",
+      "kwh": 526.415
+    },
+    {
+      "meter_id": "M-06",
+      "ts": "2026-05-26",
+      "kwh": 593.567
+    },
+    {
+      "meter_id": "M-06",
+      "ts": "2026-05-27",
+      "kwh": 537.335
+    },
+    {
+      "meter_id": "M-06",
+      "ts": "2026-05-28",
+      "kwh": 556.958
+    },
+    {
+      "meter_id": "M-06",
+      "ts": "2026-05-29",
+      "kwh": 538.717
+    },
+    {
+      "meter_id": "M-06",
+      "ts": "2026-05-30",
+      "kwh": 547.335
     }
   ],
   "hourly_readings": [

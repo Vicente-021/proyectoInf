@@ -37,7 +37,8 @@ const ACTION_LABELS = {
 };
 const TYPE_LABELS = {
   missing_reading: 'Lectura faltante',
-  hourly_consistency: 'Consistencia horaria'
+  hourly_consistency: 'Consistencia horaria',
+  daily_outlier: 'Consumo diario atípico'
 };
 const SEVERITY_LABELS = {
   critical: 'Crítica',
@@ -559,7 +560,8 @@ function kindLabel(kind) {
   const labels = {
     missing: 'Lectura faltante',
     negative_drop: 'Caída del acumulado',
-    high_jump: 'Salto sobre el umbral'
+    high_jump: 'Salto sobre el umbral',
+    outlier: 'Consumo atípico'
   };
   return labels[kind] ?? kind;
 }
@@ -594,8 +596,9 @@ function renderAlertModal() {
   const consolidationText = detail.consolidation
     ? ` · Consolidación: ${STATUS_LABELS[detail.consolidation.status] ?? detail.consolidation.status}`
     : '';
+  const referenceTs = detail.ref_ts ?? detail.items[0]?.ts;
   $('alert-meta').textContent =
-    `${detail.meter?.id ?? '—'} · ${detail.ref_ts ? fmtDate(detail.ref_ts) : 'sin fecha de referencia'}` +
+    `${detail.meter?.id ?? '—'} · ${referenceTs ? fmtDate(referenceTs) : 'sin fecha de referencia'}` +
     ` · ${SEVERITY_LABELS[detail.severity] ?? detail.severity}` +
     ` · ${detail.status === 'resolved' ? 'Resuelta' : 'Abierta'}${consolidationText}`;
 

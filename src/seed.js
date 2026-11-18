@@ -248,6 +248,57 @@ export function seedDatabase(db, data) {
       }
     }
 
+    // Consumo diario atípico: Tukey sobre las lecturas diarias de cada medidor.
+    const dailyByMeter = new Map();
+    for (const reading of data.daily_readings) {
+      if (!dailyByMeter.has(reading.meter_id)) dailyByMeter.set(reading.meter_id, []);
+      dailyByMeter.get(reading.meter_id).push(reading);
+    }
+
+    for (const meter of data.meters) {
+      const series = (dailyByMeter.get(meter.id) ?? [])
+        .slice()
+        .sort((a, b) => a.ts.localeCompare(b.ts));
+      if (series.length < 10) continue;
+      const values = series.map((reading) => reading.kwh);
+      const dq1 = quantile(values, 0.25);
+      const dq3 = quantile(values, 0.75);
+      const diqr = dq3 - dq1;
+      const lower = dq1 - 1.5 * diqr;
+      const upper = dq3 + 1.5 * diqr;
+      const outliers = series
+        .map((reading, index) => ({ ...reading, index }))
+        .filter((reading) => reading.kwh < lower || reading.kwh > upper);
+      if (!outliers.length) continue;
+
+      const info = insertAlert.run(
+        meter.client_id,
+        meter.id,
+        'daily_outlier',
+        'warning',
+        `Se detectaron ${outliers.length} consumos diarios fuera del rango esperado ` +
+          `(${lower.toFixed(1)}–${upper.toFixed(1)} kWh).`,
+        null
+      );
+      const alertId = Number(info.lastInsertRowid);
+      for (const item of outliers) {
+        const previous = series[item.index - 1]?.kwh ?? null;
+        const next = series[item.index + 1]?.kwh ?? null;
+        insertAlertItem.run(
+          alertId,
+          meter.id,
+          item.ts,
+          'outlier',
+          previous,
+          item.kwh,
+          previous === null ? null : item.kwh - previous,
+          series[item.index + 1]?.ts ?? null,
+          next,
+          next === null ? null : next - item.kwh
+        );
+      }
+    }
+
     // Usuarios de demostración (contraseña: demo). No usar en producción.
     insertUser.run('u-analista', 'Analista Marine', 'analista', demoHash);
     insertUser.run('u-aprobador', 'Jefe Comercial Marine', 'aprobador', demoHash);

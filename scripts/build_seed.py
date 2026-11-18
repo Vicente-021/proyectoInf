@@ -113,25 +113,35 @@ def main() -> None:
             "lines": reference_lines,
         }
 
-    # Cliente A: dato real anonimizado. B y C: cartera sintética derivada de A.
+    # Cliente A: dato real anonimizado. B, C y D: cartera sintética derivada de A.
     a_readings = [
         {"meter_id": "M-04", "ts": reading["ts"], "kwh": reading["kwh"]}
         for reading in daily_readings
     ]
     synthetic_specs = [
-        ("M-01", 0.65, "2026-05-15"),  # falta una lectura para demostrar el ingreso manual
-        ("M-02", 0.45, None),
+        {"meter": "M-01", "scale": 0.65, "missing": "2026-05-15"},
+        {"meter": "M-02", "scale": 0.45, "missing": None},
+        {
+            "meter": "M-06",
+            "scale": 0.55,
+            "missing": "2026-05-12",
+            "outlier": "2026-05-22",
+            "factor": 3.0,
+        },
     ]
     all_daily = list(a_readings)
-    for meter_id, scale, missing_ts in synthetic_specs:
+    for spec in synthetic_specs:
         for reading in daily_readings:
-            if missing_ts and reading["ts"] == missing_ts:
+            if spec["missing"] and reading["ts"] == spec["missing"]:
                 continue
+            kwh = reading["kwh"] * spec["scale"]
+            if spec.get("outlier") and reading["ts"] == spec["outlier"]:
+                kwh *= spec["factor"]
             all_daily.append(
                 {
-                    "meter_id": meter_id,
+                    "meter_id": spec["meter"],
                     "ts": reading["ts"],
-                    "kwh": round(reading["kwh"] * scale, 3),
+                    "kwh": round(kwh, 3),
                 }
             )
 
@@ -152,7 +162,7 @@ def main() -> None:
                 "Lecturas diarias del período 2026-05-01 a 2026-05-30. "
                 "La serie horaria (EESS) cubre 2026-05-30 17:00 a 2026-06-30 23:00. "
                 "El cliente A y su contacto fueron anonimizados. "
-                "Los clientes B y C son sintéticos y derivan de A para la demostración."
+                "Los clientes B, C y D son sintéticos y derivan de A para la demostración."
             ),
         },
         "clients": [
@@ -174,11 +184,18 @@ def main() -> None:
                 "contact": "contacto@cliente-c.cl",
                 "synthetic": True,
             },
+            {
+                "id": "CLI-D",
+                "name": "Cliente D",
+                "contact": "contacto@cliente-d.cl",
+                "synthetic": True,
+            },
         ],
         "meters": [
             {"id": "M-04", "client_id": "CLI-A", "barge": "Barcaza 2", "source": "eGauge"},
             {"id": "M-01", "client_id": "CLI-B", "barge": "Barcaza 1", "source": "eGauge"},
             {"id": "M-02", "client_id": "CLI-C", "barge": "Barcaza 1", "source": "eGauge"},
+            {"id": "M-06", "client_id": "CLI-D", "barge": "Barcaza 3", "source": "eGauge"},
         ],
         "contracts": [
             {
@@ -203,6 +220,15 @@ def main() -> None:
                 "id": "CT-2026-010",
                 "client_id": "CLI-C",
                 "factor_l_per_kwh": 1.04,
+                "price_usd_per_kwh": reference["price_usd_per_kwh"],
+                "exchange_rate": reference["exchange_rate"],
+                "valid_from": "2026-05-01",
+                "valid_to": "2026-12-31",
+            },
+            {
+                "id": "CT-2026-021",
+                "client_id": "CLI-D",
+                "factor_l_per_kwh": 1.12,
                 "price_usd_per_kwh": reference["price_usd_per_kwh"],
                 "exchange_rate": reference["exchange_rate"],
                 "valid_from": "2026-05-01",

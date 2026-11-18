@@ -52,10 +52,10 @@ test('GET /api/health es público e informa los conteos', async (t) => {
 
   assert.equal(response.status, 200);
   assert.equal(body.ok, true);
-  assert.equal(body.counts.clients, 3);
-  assert.equal(body.counts.daily, 89);
+  assert.equal(body.counts.clients, 4);
+  assert.equal(body.counts.daily, 118);
   assert.equal(body.counts.hourly, 751);
-  assert.equal(body.counts.alerts, 2);
+  assert.equal(body.counts.alerts, 7);
 });
 
 test('sirve la interfaz y los archivos estáticos', async (t) => {
@@ -114,7 +114,7 @@ test('GET /api/clients devuelve la cartera con totales', async (t) => {
   const body = await response.json();
 
   assert.equal(response.status, 200);
-  assert.equal(body.clients.length, 3);
+  assert.equal(body.clients.length, 4);
 
   const clientA = body.clients.find((client) => client.id === 'CLI-A');
   assert.equal(clientA.meter_id, 'M-04');
@@ -122,7 +122,7 @@ test('GET /api/clients devuelve la cartera con totales', async (t) => {
   assert.ok(Math.abs(clientA.total_kwh - 30811.227520008) < 1e-6);
 
   const clientB = body.clients.find((client) => client.id === 'CLI-B');
-  assert.equal(clientB.open_alerts, 1);
+  assert.equal(clientB.open_alerts, 2);
   assert.equal(clientB.synthetic, 1);
 });
 
@@ -205,8 +205,8 @@ test('el resumen del período informa cartera y alertas', async (t) => {
     r.json()
   );
 
-  assert.equal(body.clients, 3);
-  assert.equal(body.criticalAlerts, 1);
+  assert.equal(body.clients, 4);
+  assert.equal(body.criticalAlerts, 2);
   assert.ok(body.estimatedClp > 0);
   assert.equal(body.period, '2026-05');
 });
@@ -256,8 +256,9 @@ test('flujo completo: alerta, ingreso manual, envío y aprobación', async (t) =
   const alerts = await api(base, '/api/alerts?status=open&client=CLI-B', {
     cookie: analyst
   }).then((r) => r.json());
-  assert.equal(alerts.alerts.length, 1);
-  assert.equal(alerts.alerts[0].type, 'missing_reading');
+  assert.equal(alerts.alerts.length, 2);
+  const missingAlert = alerts.alerts.find((item) => item.type === 'missing_reading');
+  assert.ok(missingAlert);
 
   // Se puede generar el borrador, pero no enviarlo con una alerta crítica.
   const draft = await api(base, '/api/consolidations', {
@@ -398,7 +399,8 @@ test('una alerta de lectura faltante no se resuelve sin ingreso manual', async (
     cookie
   }).then((r) => r.json());
 
-  const response = await api(base, `/api/alerts/${alerts.alerts[0].id}/resolve`, {
+  const missingAlert = alerts.alerts.find((item) => item.type === 'missing_reading');
+  const response = await api(base, `/api/alerts/${missingAlert.id}/resolve`, {
     method: 'POST',
     cookie,
     body: { note: 'Se revisó y no se encontró la lectura' }
@@ -411,7 +413,9 @@ test('la alerta de B muestra la medición faltante y se corrige con un valor', a
   const analyst = await login(base, 'u-analista');
 
   const list = await api(base, '/api/alerts?status=open', { cookie: analyst }).then((r) => r.json());
-  const alert = list.alerts.find((item) => item.client_id === 'CLI-B');
+  const alert = list.alerts.find(
+    (item) => item.client_id === 'CLI-B' && item.type === 'missing_reading'
+  );
   assert.equal(alert.items_total, 1);
   assert.equal(alert.items_open, 1);
 
@@ -441,6 +445,44 @@ test('la alerta de B muestra la medición faltante y se corrige con un valor', a
   const manual = readings.readings.find((item) => item.ts === '2026-05-15');
   assert.equal(manual.kwh, 700.5);
   assert.equal(manual.status, 'manual');
+});
+
+test('el consumo diario atípico permite corregir el valor', async (t) => {
+  const { base } = await withServer(t);
+  const analyst = await login(base, 'u-analista');
+
+  const list = await api(base, '/api/alerts?status=open&client=CLI-D', {
+    cookie: analyst
+  }).then((r) => r.json());
+  const alert = list.alerts.find((item) => item.type === 'daily_outlier');
+  assert.equal(alert.items_total, 2);
+  assert.equal(alert.items_open, 2);
+
+  const detail = await api(base, `/api/alerts/${alert.id}`, { cookie: analyst }).then((r) => r.json());
+  const item = detail.items.find((candidate) => candidate.status === 'open');
+  const correctedValue = Math.round((Number(item.value) / 2) * 1000) / 1000;
+
+  const corrected = await api(base, `/api/alerts/${alert.id}/correct`, {
+    method: 'POST',
+    cookie: analyst,
+    body: {
+      ts: item.ts,
+      value: correctedValue,
+      reason: 'Consumo corregido con el registro en terreno'
+    }
+  });
+  assert.equal(corrected.status, 200);
+  const body = await corrected.json();
+  const changed = body.items.find((candidate) => candidate.ts === item.ts);
+  assert.equal(changed.status, 'corrected');
+  assert.equal(body.items.filter((candidate) => candidate.status === 'open').length, 1);
+
+  const readings = await api(base, '/api/readings?kind=daily&meter=M-06&limit=100', {
+    cookie: analyst
+  }).then((r) => r.json());
+  const updated = readings.readings.find((candidate) => candidate.ts === item.ts);
+  assert.equal(updated.kwh, correctedValue);
+  assert.equal(updated.status, 'manual');
 });
 
 test('la alerta horaria lista sus mediciones y permite corregir una', async (t) => {
@@ -516,8 +558,8 @@ test('la ficha del cliente devuelve resumen, alertas y consolidación', async (t
   assert.equal(detail.client.synthetic, 0);
   assert.equal(detail.summary.readings, 30);
   assert.equal(detail.summary.totalClp, 21004949.14);
-  assert.equal(detail.alerts.length, 1);
-  assert.equal(detail.alerts[0].type, 'hourly_consistency');
+  assert.equal(detail.alerts.length, 2);
+  assert.ok(detail.alerts.some((item) => item.type === 'hourly_consistency'));
   assert.equal(detail.consolidation, null);
 
   const missing = await api(base, '/api/clients/NOPE', { cookie });
@@ -531,7 +573,8 @@ test('una alerta de consistencia se resuelve con una nota', async (t) => {
     cookie
   }).then((r) => r.json());
 
-  const response = await api(base, `/api/alerts/${alerts.alerts[0].id}/resolve`, {
+  const hourlyAlert = alerts.alerts.find((item) => item.type === 'hourly_consistency');
+  const response = await api(base, `/api/alerts/${hourlyAlert.id}/resolve`, {
     method: 'POST',
     cookie,
     body: { note: 'Se revisaron los saltos con el área de operación' }
@@ -542,7 +585,7 @@ test('una alerta de consistencia se resuelve con una nota', async (t) => {
   assert.ok(body.items.length > 0);
   assert.ok(body.items.every((item) => item.status === 'reviewed'));
 
-  const again = await api(base, `/api/alerts/${alerts.alerts[0].id}/resolve`, {
+  const again = await api(base, `/api/alerts/${hourlyAlert.id}/resolve`, {
     method: 'POST',
     cookie,
     body: { note: 'Segundo intento de resolución' }

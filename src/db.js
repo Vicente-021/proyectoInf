@@ -131,7 +131,7 @@ export function migrate(db) {
       alert_id        INTEGER NOT NULL REFERENCES alerts(id) ON DELETE CASCADE,
       meter_id        TEXT NOT NULL REFERENCES meters(id),
       ts              TEXT NOT NULL,
-      kind            TEXT NOT NULL CHECK (kind IN ('missing', 'negative_drop', 'high_jump')),
+      kind            TEXT NOT NULL CHECK (kind IN ('missing', 'negative_drop', 'high_jump', 'outlier')),
       previous_value  REAL,
       value           REAL,
       delta           REAL,
@@ -184,6 +184,39 @@ export function migrate(db) {
   // Migraciones para bases creadas con el esquema del paso 1.
   ensureColumn(db, 'clients', 'synthetic', 'INTEGER NOT NULL DEFAULT 0');
   ensureColumn(db, 'alerts', 'ref_ts', 'TEXT');
+  ensureAlertItemsSchema(db);
+}
+
+function ensureAlertItemsSchema(db) {
+  const row = db
+    .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'alert_items'")
+    .get();
+  if (row?.sql && !row.sql.includes("'outlier'")) {
+    db.exec(`
+      DROP TABLE alert_items;
+      CREATE TABLE alert_items (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        alert_id        INTEGER NOT NULL REFERENCES alerts(id) ON DELETE CASCADE,
+        meter_id        TEXT NOT NULL REFERENCES meters(id),
+        ts              TEXT NOT NULL,
+        kind            TEXT NOT NULL CHECK (kind IN ('missing', 'negative_drop', 'high_jump', 'outlier')),
+        previous_value  REAL,
+        value           REAL,
+        delta           REAL,
+        next_ts         TEXT,
+        next_value      REAL,
+        next_delta      REAL,
+        status          TEXT NOT NULL DEFAULT 'open'
+                        CHECK (status IN ('open', 'corrected', 'reviewed')),
+        corrected_value REAL,
+        corrected_at    TEXT,
+        corrected_by    TEXT,
+        note            TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_alert_items_alert ON alert_items (alert_id);
+      CREATE INDEX IF NOT EXISTS idx_alert_items_meter_ts ON alert_items (meter_id, ts);
+    `);
+  }
 }
 
 function ensureColumn(db, table, column, definition) {

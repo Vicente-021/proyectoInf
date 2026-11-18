@@ -835,7 +835,7 @@ async function handle(db, req, res) {
     const alert = db.prepare('SELECT * FROM alerts WHERE id = ?').get(id);
     if (!alert) return sendError(res, 404, 'alerta no encontrada');
     if (alert.status !== 'open') return sendError(res, 409, 'la alerta ya está resuelta');
-    if (!['missing_reading', 'hourly_consistency'].includes(alert.type)) {
+    if (!['missing_reading', 'hourly_consistency', 'daily_outlier'].includes(alert.type)) {
       return sendError(res, 400, 'esta alerta no admite corrección de una medición');
     }
 
@@ -847,7 +847,7 @@ async function handle(db, req, res) {
     if (!Number.isFinite(value)) {
       return sendError(res, 400, 'el valor de la medición debe ser numérico');
     }
-    if (alert.type === 'missing_reading' && value <= 0) {
+    if (['missing_reading', 'daily_outlier'].includes(alert.type) && value <= 0) {
       return sendError(res, 400, 'la lectura debe ser mayor que 0');
     }
     if (alert.type === 'hourly_consistency' && value < 0) {
@@ -873,7 +873,7 @@ async function handle(db, req, res) {
             (candidate) =>
               candidate.ts === ts &&
               candidate.status === 'open' &&
-              ['negative_drop', 'high_jump'].includes(candidate.kind)
+              ['negative_drop', 'high_jump', 'outlier'].includes(candidate.kind)
           );
     if (!item) {
       return sendError(res, 404, 'no se encontró la medición asociada a la alerta');
@@ -907,7 +907,7 @@ async function handle(db, req, res) {
         alert.meter_id,
         ts,
         value,
-        alert.type === 'missing_reading' ? 'daily' : 'hourly',
+        ['missing_reading', 'daily_outlier'].includes(alert.type) ? 'daily' : 'hourly',
         reason
       );
 

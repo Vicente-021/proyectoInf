@@ -46,7 +46,7 @@
 
 - No improvisar más de 30 segundos.
 - Pasar a la lámina de respaldo 20 (captura de consolidación).
-- Explicar que el flujo está cubierto por 36 pruebas y por la evidencia de `docs/rnf.md`.
+- Explicar que el flujo está cubierto por 37 pruebas y por la evidencia de `docs/rnf.md`.
 - Continuar con C3.
 
 ## Preguntas: quién responde

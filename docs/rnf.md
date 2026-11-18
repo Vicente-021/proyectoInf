@@ -1,6 +1,6 @@
 # Medición de requisitos no funcionales — SVDM MVP
 
-Generado: `2026-11-18T00:23:14.023Z`
+Generado: `2026-11-18T00:31:20.625Z`
 
 ## Entorno
 
@@ -14,16 +14,16 @@ Generado: `2026-11-18T00:23:14.023Z`
 
 | RNF | Objetivo | Método | Valor obtenido | Veredicto |
 |---|---|---|---|---|
-| **RNF-R-1** | Consolidación mensual ≤ 5 min (300.000 ms) | 10 corridas HTTP sobre 30 lecturas y, aparte, 10 corridas con 5 años de datos | p95 **3,90 ms** (30 líneas); p95 **5,77 ms** con 450.083 filas | **Cumple** |
-| **RNF-R-2** | Ciclo de ingesta ≤ 60 s | 3 cargas del seed (840 lecturas) en base nueva, medidas de punta a punta | mediana **10,90 ms**; máximo 21,88 ms | **Cumple** |
-| **RNF-R-3** | 5 años de datos sin degradar R-1 | 10 medidores × 60 meses × (30 diarias + 720 horarias), 10 corridas de consolidación | **450.083 filas**, 71.1 MB; p95 **5,77 ms** | **Cumple** |
+| **RNF-R-1** | Consolidación mensual ≤ 5 min (300.000 ms) | 10 corridas HTTP sobre 30 lecturas y, aparte, 10 corridas con 5 años de datos | p95 **4,55 ms** (30 líneas); p95 **5,10 ms** con 450.112 filas | **Cumple** |
+| **RNF-R-2** | Ciclo de ingesta ≤ 60 s | 3 cargas del seed (869 lecturas) en base nueva, medidas de punta a punta | mediana **9,52 ms**; máximo 70,98 ms | **Cumple** |
+| **RNF-R-3** | 5 años de datos sin degradar R-1 | 10 medidores × 60 meses × (30 diarias + 720 horarias), 10 corridas de consolidación | **450.112 filas**, 71.0 MB; p95 **5,10 ms** | **Cumple** |
 | **RNF-E-1** | 0 discrepancias en ≥ 30 casos, tolerancia ≤ 1 CLP por línea | Comparación línea a línea contra la planilla para el Cliente A | 30 casos; **0 líneas** fuera de tolerancia; diferencia máxima 0,004952 CLP; total 0,004409 CLP | **Cumple** |
 | **RNF-E-2** | 0 lecturas duplicadas o modificadas | Consulta de duplicados antes y después de recargar el seed | **0 duplicados**; 0 tras recargar | **Cumple** |
 | **RNF-S-2** | RBAC, mínimo privilegio | Matriz de 8 controles rol × acción sobre la API | **8/8** controles correctos | **Cumple** |
 | **RNF-S-4** | 100 % de eventos críticos auditados | Comparación de acciones ejecutadas contra `audit_events` | **4/4** acciones auditadas; motivo del ingreso manual presente | **Cumple** |
-| **RNF-M-1** | Cobertura ≥ 70 % global y ≥ 90 % en cálculo | `node --experimental-test-coverage --test` | global **92,38%**; cálculo **92,38%** | **Cumple** |
+| **RNF-M-1** | Cobertura ≥ 70 % global y ≥ 90 % en cálculo | `node --experimental-test-coverage --test` | global **91,33%**; cálculo **92,38%** | **Cumple** |
 | **RNF-D-1** | Disponibilidad ≥ 99,5 % mensual | Conteo de respuestas 5xx durante la corrida | 351 solicitudes; **0** errores 5xx | **Parcial**: no sustituye monitoreo mensual |
-| **RNF-P-1** | Despliegue local reproducible ≤ 15 min | Seed + arranque del servidor medidos | seed 10,90 ms + arranque 6,55 ms | **Parcial**: sin IaC ni rollback |
+| **RNF-P-1** | Despliegue local reproducible ≤ 15 min | Seed + arranque del servidor medidos | seed 9,52 ms + arranque 7,22 ms | **Parcial**: sin IaC ni rollback |
 | **RNF-C-1** | Chrome/Edge y contrato OpenAPI | Flujo E2E automatizado en Chromium | Flujo completo OK en Chromium; Edge no disponible | **Parcial** |
 
 ## Latencia de API
@@ -32,12 +32,12 @@ Medición local sobre loopback (50 solicitudes por endpoint, tras 3 de calentami
 
 | Endpoint | p50 | p95 | Máximo |
 |---|---|---|---|
-| `/api/summary?period=2026-05` | 2,33 ms | 3,22 ms | 3,38 ms |
-| `/api/clients?period=2026-05` | 2,29 ms | 2,66 ms | 3,15 ms |
-| `/api/clients/CLI-A?period=2026-05` | 2,54 ms | 4,38 ms | 9,81 ms |
-| `/api/consolidations?period=2026-05` | 1,98 ms | 2,96 ms | 4,03 ms |
-| `/api/consolidations/1` | 2,16 ms | 2,65 ms | 3,21 ms |
-| `/api/alerts?status=all` | 1,94 ms | 2,37 ms | 2,61 ms |
+| `/api/summary?period=2026-05` | 2,69 ms | 9,81 ms | 11,72 ms |
+| `/api/clients?period=2026-05` | 2,17 ms | 2,53 ms | 2,90 ms |
+| `/api/clients/CLI-A?period=2026-05` | 2,49 ms | 9,50 ms | 10,42 ms |
+| `/api/consolidations?period=2026-05` | 2,03 ms | 7,28 ms | 13,90 ms |
+| `/api/consolidations/1` | 2,37 ms | 8,88 ms | 9,51 ms |
+| `/api/alerts?status=all` | 2,04 ms | 7,83 ms | 8,14 ms |
 
 ## RNF no medidos en este entorno
 
@@ -55,8 +55,8 @@ Medición local sobre loopback (50 solicitudes por endpoint, tras 3 de calentami
 ## Lectura de los resultados
 
 - El cálculo es reproducible: el total del Cliente A es **21.004.949,136 CLP**, con una diferencia de **0,004409 CLP** frente a la planilla.
-- La consolidación tarda **3,90 ms** con 30 lecturas y **5,77 ms** con 450.083 filas; el objetivo era 300.000 ms.
-- La ingesta de 840 lecturas tarda **10,90 ms** de mediana, muy por debajo de los 60 s.
+- La consolidación tarda **4,55 ms** con 30 lecturas y **5,10 ms** con 450.112 filas; el objetivo era 300.000 ms.
+- La ingesta de 869 lecturas tarda **9,52 ms** de mediana, muy por debajo de los 60 s.
 - Los RNF de seguridad, disponibilidad y accesibilidad que dependen de infraestructura o de usuarios se declaran como parciales o pendientes; no se presentan como cumplidos.
 
 ## Reproducción
