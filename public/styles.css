@@ -200,10 +200,29 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 
 /* ---------- Diálogos ---------- */
 dialog { border: 1px solid var(--line); border-radius: 8px; padding: 22px; width: min(480px, 92vw); margin: auto; }
-#dlg-alert { width: min(760px, 94vw); }
-#alert-items table { font-size: 12px; }
-#alert-items th, #alert-items td { padding: 7px 8px; }
-#alert-message { margin-bottom: 10px; }
+#dlg-alert {
+  width: min(980px, 96vw);
+  max-height: 90vh;
+  padding: 26px 28px;
+  overflow-y: auto;
+}
+#dlg-alert h3 { font-size: 19px; margin-bottom: 4px; }
+#alert-meta { font-size: 12.5px; margin-bottom: 10px; }
+#alert-items {
+  max-height: 54vh;
+  overflow-y: auto;
+  margin-top: 4px;
+}
+#alert-items table { font-size: 13px; }
+#alert-items th, #alert-items td { padding: 9px 10px; vertical-align: top; }
+#alert-items thead th { position: sticky; top: 0; background: #f8f9fa; z-index: 1; }
+#alert-items th:first-child, #alert-items td:first-child { min-width: 170px; }
+#alert-message { margin-bottom: 12px; }
+#alert-message .alert-banner, #alert-message .warn-banner, #alert-message .ok-banner {
+  padding: 13px 16px;
+  font-size: 13px;
+}
+#alert-resolve-note { margin-left: auto; }
 dialog::backdrop { background: rgba(20, 42, 69, .45); }
 dialog h3 { font-size: 17px; color: var(--navy); margin-bottom: 6px; }
 dialog label { display: block; font-size: 12px; color: #555; margin: 12px 0 4px; }
