@@ -116,7 +116,9 @@ export function migrate(db) {
       exchange_rate    REAL NOT NULL,
       factor_l_per_kwh REAL NOT NULL,
       amount_clp       REAL NOT NULL,
-      liters           REAL NOT NULL
+      liters           REAL NOT NULL,
+      source           TEXT,
+      reading_status   TEXT
     );
 
     CREATE TABLE IF NOT EXISTS alerts (
@@ -196,6 +198,8 @@ export function migrate(db) {
   // Migraciones para bases creadas con el esquema del paso 1.
   ensureColumn(db, 'clients', 'synthetic', 'INTEGER NOT NULL DEFAULT 0');
   ensureColumn(db, 'alerts', 'ref_ts', 'TEXT');
+  ensureColumn(db, 'consolidation_lines', 'source', 'TEXT');
+  ensureColumn(db, 'consolidation_lines', 'reading_status', 'TEXT');
   ensureAlertItemsSchema(db);
   ensureAuditSchema(db);
   ensureUsersSchema(db);

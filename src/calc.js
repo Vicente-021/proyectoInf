@@ -88,7 +88,9 @@ export function consolidate({ readings, contract, price }) {
       exchange_rate: exchangeRate,
       factor_l_per_kwh: contract.factor_l_per_kwh,
       amount_clp: round(amount, 2),
-      liters: round(liters, 6)
+      liters: round(liters, 6),
+      source: reading.source ?? null,
+      status: reading.status ?? null
     };
   });
 

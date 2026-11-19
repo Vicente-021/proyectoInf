@@ -1,50 +1,50 @@
-✔ round redondea a 2 decimales sin arrastrar error de punto flotante (2.597359ms)
-✔ amountClp aplica kWh x USD/kWh x tipo de cambio (0.332163ms)
-✔ litersFromKwh aplica el factor contractual (0.208917ms)
-✔ consolidate calcula líneas y totales (0.586533ms)
-✔ consolidate usa el precio del contrato si no recibe precio del período (0.208927ms)
-✔ consolidate redondea cada línea y suma los montos redondeados (0.212458ms)
-✔ consolidate rechaza un arreglo vacío (0.706221ms)
-✔ consolidate rechaza kWh negativo (0.225349ms)
-✔ consolidate rechaza precio o tipo de cambio no positivos (0.370186ms)
-✔ la migración conserva usuarios, consolidaciones y líneas existentes (71.860911ms)
-✔ el seed carga la cartera, contratos, precios y lecturas (41.909546ms)
-✔ el seed marca la lectura faltante de B y la inconsistencia horaria de A (14.018939ms)
-✔ el seed es idempotente (21.374322ms)
-✔ la consolidación del Cliente A reproduce el total de la planilla (11.131325ms)
-✔ la base rechaza lecturas duplicadas y kWh negativos (9.846863ms)
-✔ el seed crea los roles y la cuenta administradora (10.003561ms)
-✔ GET /api/health es público e informa los conteos (79.314238ms)
-✔ sirve la interfaz y los archivos estáticos (31.342977ms)
-✔ login, sesión y logout (31.383855ms)
-✔ las rutas de negocio exigen autenticación (19.087942ms)
-✔ GET /api/clients devuelve la cartera con totales (15.923956ms)
-✔ GET /api/readings filtra por tipo, medidor y límite (21.416054ms)
-✔ el preview reproduce el total del Cliente A (16.48914ms)
-✔ el preview responde 400, 404 y 409 según el caso (23.258845ms)
-✔ el resumen del período informa cartera y alertas (13.716405ms)
-✔ el resumen y la cartera rechazan períodos inválidos (14.958386ms)
-✔ un analista no puede aprobar y un aprobador no puede generar (21.134282ms)
-✔ flujo completo: alerta, ingreso manual, envío y aprobación (50.484664ms)
-✔ rechazo con motivo devuelve la consolidación a borrador (25.898332ms)
-✔ una alerta de lectura faltante no se resuelve sin ingreso manual (15.619256ms)
-✔ la alerta de B muestra la medición faltante y se corrige con un valor (22.679449ms)
-✔ el consumo diario atípico permite corregir el valor (23.476784ms)
-✔ la alerta horaria lista sus mediciones y permite corregir una (19.996785ms)
-✔ corregir una alerta exige analista, motivo y una medición válida (23.302537ms)
-✔ la ficha del cliente devuelve resumen, alertas y consolidación (14.317152ms)
-✔ una alerta de consistencia se resuelve con una nota (26.10674ms)
-✔ la lista de consolidaciones y su detalle están disponibles (21.840283ms)
-✔ crear consolidación valida cliente, período y estado (37.117805ms)
-✔ solo el administrador puede consultar y cambiar roles (18.086536ms)
-✔ el cambio de rol se aplica a una sesión ya iniciada y queda auditado (29.093983ms)
-✔ el administrador no puede cambiar su propio rol ni dejar el sistema sin administrador (21.646615ms)
-✔ la rectificación crea una versión nueva sin tocar la aprobada (34.852055ms)
-✔ al aprobar la rectificación se cambia la versión vigente y queda historial (38.976415ms)
-✔ el rechazo de la rectificación mantiene vigente la versión anterior (37.923562ms)
-✔ dos rectificaciones concurrentes solo crean una (30.072774ms)
-✔ un borrador desactualizado no se puede enviar hasta regenerarlo (38.81002ms)
-✔ el administrador TI sin rol operativo no aprueba consolidaciones (22.265955ms)
+✔ round redondea a 2 decimales sin arrastrar error de punto flotante (2.484493ms)
+✔ amountClp aplica kWh x USD/kWh x tipo de cambio (0.284354ms)
+✔ litersFromKwh aplica el factor contractual (0.174688ms)
+✔ consolidate calcula líneas y totales (0.541278ms)
+✔ consolidate usa el precio del contrato si no recibe precio del período (0.177795ms)
+✔ consolidate redondea cada línea y suma los montos redondeados (0.181308ms)
+✔ consolidate rechaza un arreglo vacío (0.603127ms)
+✔ consolidate rechaza kWh negativo (0.244718ms)
+✔ consolidate rechaza precio o tipo de cambio no positivos (0.301399ms)
+✔ la migración conserva usuarios, consolidaciones y líneas existentes (69.973228ms)
+✔ el seed carga la cartera, contratos, precios y lecturas (36.570878ms)
+✔ el seed marca la lectura faltante de B y la inconsistencia horaria de A (13.99907ms)
+✔ el seed es idempotente (23.382532ms)
+✔ la consolidación del Cliente A reproduce el total de la planilla (11.787197ms)
+✔ la base rechaza lecturas duplicadas y kWh negativos (12.444471ms)
+✔ el seed crea los roles y la cuenta administradora (9.126146ms)
+✔ GET /api/health es público e informa los conteos (80.510801ms)
+✔ sirve la interfaz y los archivos estáticos (27.001985ms)
+✔ login, sesión y logout (28.60599ms)
+✔ las rutas de negocio exigen autenticación (18.615395ms)
+✔ GET /api/clients devuelve la cartera con totales (19.100811ms)
+✔ GET /api/readings filtra por tipo, medidor y límite (22.000354ms)
+✔ el preview reproduce el total del Cliente A (16.00943ms)
+✔ el preview responde 400, 404 y 409 según el caso (22.115615ms)
+✔ el resumen del período informa cartera y alertas (13.926977ms)
+✔ el resumen y la cartera rechazan períodos inválidos (14.851121ms)
+✔ un analista no puede aprobar y un aprobador no puede generar (22.411977ms)
+✔ flujo completo: alerta, ingreso manual, envío y aprobación (50.908063ms)
+✔ rechazo con motivo devuelve la consolidación a borrador (27.863526ms)
+✔ una alerta de lectura faltante no se resuelve sin ingreso manual (16.279124ms)
+✔ la alerta de B muestra la medición faltante y se corrige con un valor (20.737547ms)
+✔ el consumo diario atípico permite corregir el valor (25.061872ms)
+✔ la alerta horaria lista sus mediciones y permite corregir una (22.014056ms)
+✔ corregir una alerta exige analista, motivo y una medición válida (22.691384ms)
+✔ la ficha del cliente devuelve resumen, alertas y consolidación (17.655333ms)
+✔ una alerta de consistencia se resuelve con una nota (23.268499ms)
+✔ la lista de consolidaciones y su detalle están disponibles (22.322041ms)
+✔ crear consolidación valida cliente, período y estado (34.958819ms)
+✔ solo el administrador puede consultar y cambiar roles (19.64969ms)
+✔ el cambio de rol se aplica a una sesión ya iniciada y queda auditado (26.736895ms)
+✔ el administrador no puede cambiar su propio rol ni dejar el sistema sin administrador (20.942596ms)
+✔ la rectificación crea una versión nueva sin tocar la aprobada (35.967924ms)
+✔ al aprobar la rectificación se cambia la versión vigente y queda historial (42.716469ms)
+✔ el rechazo de la rectificación mantiene vigente la versión anterior (36.733893ms)
+✔ dos rectificaciones concurrentes solo crean una (30.115114ms)
+✔ un borrador desactualizado no se puede enviar hasta regenerarlo (39.827641ms)
+✔ el administrador TI sin rol operativo no aprueba consolidaciones (22.990232ms)
 ℹ tests 47
 ℹ suites 0
 ℹ pass 47
@@ -52,19 +52,19 @@
 ℹ cancelled 0
 ℹ skipped 0
 ℹ todo 0
-ℹ duration_ms 1033.702667
+ℹ duration_ms 1019.904558
 ℹ start of coverage report
-ℹ ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ℹ -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 ℹ file       | line % | branch % | funcs % | uncovered lines
-ℹ ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ℹ -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 ℹ src        |        |          |         | 
 ℹ  auth.js   | 100.00 |   100.00 |  100.00 | 
-ℹ  calc.js   |  92.38 |    80.77 |  100.00 | 14-15 40-41 60-61 71-72
-ℹ  db.js     |  92.26 |    90.00 |  100.00 | 239-240 317-341
+ℹ  calc.js   |  92.52 |    82.14 |  100.00 | 14-15 40-41 60-61 71-72
+ℹ  db.js     |  92.35 |    90.00 |  100.00 | 243-244 321-345
 ℹ  seed.js   |  94.35 |    61.54 |  100.00 | 319-321 338-354
-ℹ  server.js |  90.01 |    74.94 |   94.74 | 46-49 57-58 65-66 84-86 93-94 107 147-149 251-252 423-424 427-428 475-476 484-485 494-495 508-509 542-544 709-713 766-767 793-794 880-882 895-896 899-900 906-907 926-928 998-1003 1016-1017 1037-1038 1072-1073 1075-1080 1086-1087 1099-1101 1131-1136 1149-1150 1159-1160 1178-1179 1186-1187 1189-1190 1192-1193 1245-1247 1265-1266 1273-1274 1282-1283 1285-1286 1288-1289 1299-1300 1313-1314 1318-1323 1369-1371 1384-1385 1388-1389 1416-1421 1430-1441
-ℹ ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-ℹ all files  |  91.41 |    74.86 |   97.59 | 
-ℹ ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ℹ  server.js |  90.06 |    74.22 |   94.74 | 46-49 57-58 65-66 84-86 93-94 107 147-149 251-252 426-427 430-431 478-479 487-488 497-498 511-512 545-547 712-716 769-770 796-797 885-887 900-901 904-905 911-912 931-933 1005-1010 1023-1024 1044-1045 1079-1080 1082-1087 1093-1094 1106-1108 1138-1143 1156-1157 1166-1167 1185-1186 1193-1194 1196-1197 1199-1200 1252-1254 1272-1273 1280-1281 1289-1290 1292-1293 1295-1296 1306-1307 1320-1321 1325-1330 1376-1378 1391-1392 1395-1396 1423-1428 1437-1448
+ℹ -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ℹ all files  |  91.46 |    74.41 |   97.59 | 
+ℹ -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 ℹ end of coverage report
 

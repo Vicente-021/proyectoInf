@@ -350,6 +350,11 @@ function renderResumen() {
     </li>`).join('') || '<li><span class="empty">Sin actividad.</span></li>';
 }
 
+function readingOriginBadge(source) {
+  if (source === 'manual') return '<span class="badge badge-review">Manual</span>';
+  return `<span class="badge badge-info">${esc(source ?? '—')}</span>`;
+}
+
 function versionState(item) {
   if (item.is_current === 1) return { label: 'Vigente', cls: 'badge-ok' };
   if (item.status === 'aprobada') return { label: 'Histórica', cls: 'badge-info' };
@@ -455,6 +460,7 @@ function renderConsolidacion() {
   const lines = detail.lines.map((line) => `
     <tr>
       <td>${fmtDate(line.ts)}</td>
+      <td>${readingOriginBadge(line.source)}</td>
       <td class="num">${fmtNum(line.kwh, 3)}</td>
       <td class="num">${fmtNum(line.price_usd_per_kwh, 5)}</td>
       <td class="num">${fmtNum(line.exchange_rate, 3)}</td>
@@ -484,7 +490,7 @@ function renderConsolidacion() {
       </div>
       <div class="table-wrap scroll">
         <table>
-          <thead><tr><th>Fecha</th><th class="num">kWh</th><th class="num">USD/kWh</th><th class="num">T.C.</th><th class="num">Factor</th><th class="num">CLP</th><th class="num">Litros</th></tr></thead>
+          <thead><tr><th>Fecha</th><th>Origen</th><th class="num">kWh</th><th class="num">USD/kWh</th><th class="num">T.C.</th><th class="num">Factor</th><th class="num">CLP</th><th class="num">Litros</th></tr></thead>
           <tbody>${lines}</tbody>
         </table>
       </div>

@@ -25,7 +25,7 @@ npm run coverage # cobertura con la herramienta integrada de Node
 
 - **Login** con los dos usuarios de demostración.
 - **Resumen**: KPIs, consumo por cliente, estado del cierre, fuentes y actividad.
-- **Consolidación**: generar, ver líneas, enviar a revisión, aprobar o rechazar.
+- **Consolidación**: generar, ver líneas con su **origen** (`eGauge`/`manual`), enviar a revisión, aprobar o rechazar.
 - **Clientes**: cartera y ficha por cliente con contrato, lecturas y alertas.
 - **Alertas**: detalle de las mediciones afectadas, corrección del valor con motivo y resolución con nota.
 - **Auditoría**: historial de acciones.
@@ -151,7 +151,7 @@ El monto se redondea por línea a 2 decimales y el total es la suma de las líne
 ## Pruebas y cobertura
 
 - **47 pruebas**: cálculo, seed, autenticación, permisos, máquina de estados, inmutabilidad, alertas, API e interfaz estática.
-- **91,41 %** de cobertura de línea (servidor: 90,01 %).
+- **91,46 %** de cobertura de línea (servidor: 90,06 %).
 
 ## Evidencia de RNF
 
@@ -169,14 +169,14 @@ Resultados principales de la última corrida:
 
 | RNF | Resultado |
 |---|---|
-| Consolidación mensual (R-1) | p95 **3,9 ms** con 30 líneas; **5,52 ms** con 450.112 filas |
-| Ingesta (R-2) | mediana **9,87 ms** para 869 lecturas |
+| Consolidación mensual (R-1) | p95 **7,8 ms** con 30 líneas; **6,04 ms** con 450.112 filas |
+| Ingesta (R-2) | mediana **9,43 ms** para 869 lecturas |
 | Volumen 5 años (R-3) | **450.112 filas**, 71,0 MB, sin degradar la consolidación |
 | Exactitud (E-1) | **0 líneas** fuera de tolerancia; diferencia total **0,004409 CLP** |
 | Integridad (E-2) | **0 duplicados** antes y después de recargar |
 | RBAC (S-2) | **8/8** controles rol × acción |
 | Auditoría (S-4) | **4/4** acciones críticas registradas |
-| Cobertura (M-1) | global **91,41 %**; cálculo **92,38 %** |
+| Cobertura (M-1) | global **91,46 %**; cálculo **92,52 %** |
 
 Los RNF que dependen de infraestructura o de usuarios (MFA, TLS, RPO/RTO, WCAG, validación) quedan declarados como parciales o pendientes en `docs/rnf.md`.
 

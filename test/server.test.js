@@ -303,6 +303,14 @@ test('flujo completo: alerta, ingreso manual, envío y aprobación', async (t) =
   assert.equal(recalculated.status, 201);
   const recalculatedBody = await recalculated.json();
   assert.equal(recalculatedBody.lines.length, 30);
+  const manualLine = recalculatedBody.lines.find((line) => line.ts === '2026-05-15');
+  assert.equal(manualLine.source, 'manual');
+  assert.equal(manualLine.reading_status, 'manual');
+  assert.ok(
+    recalculatedBody.lines
+      .filter((line) => line.ts !== '2026-05-15')
+      .every((line) => line.source === 'eGauge')
+  );
 
   const submitted = await api(
     base,

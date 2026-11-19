@@ -305,7 +305,10 @@ function consolidationDetail(db, consolidationId) {
   if (!header) return null;
   const lines = db
     .prepare(
-      `SELECT l.*, r.ts
+      `SELECT l.*, r.ts,
+              COALESCE(l.source, r.source) AS source,
+              COALESCE(l.reading_status, r.status) AS reading_status,
+              r.note AS reading_note
        FROM consolidation_lines l
        LEFT JOIN readings r ON r.id = l.reading_id
        WHERE l.consolidation_id = ?
@@ -851,8 +854,8 @@ async function handle(db, req, res) {
       const insertLine = db.prepare(
         `INSERT INTO consolidation_lines
            (consolidation_id, reading_id, kwh, price_usd_per_kwh, exchange_rate,
-            factor_l_per_kwh, amount_clp, liters)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+            factor_l_per_kwh, amount_clp, liters, source, reading_status)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       );
       for (const line of result.lines) {
         insertLine.run(
@@ -863,7 +866,9 @@ async function handle(db, req, res) {
           line.exchange_rate,
           line.factor_l_per_kwh,
           line.amount_clp,
-          line.liters
+          line.liters,
+          line.source ?? null,
+          line.status ?? null
         );
       }
 
@@ -961,8 +966,8 @@ async function handle(db, req, res) {
       const insertLine = db.prepare(
         `INSERT INTO consolidation_lines
            (consolidation_id, reading_id, kwh, price_usd_per_kwh, exchange_rate,
-            factor_l_per_kwh, amount_clp, liters)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+            factor_l_per_kwh, amount_clp, liters, source, reading_status)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       );
       for (const line of result.lines) {
         insertLine.run(
@@ -973,7 +978,9 @@ async function handle(db, req, res) {
           line.exchange_rate,
           line.factor_l_per_kwh,
           line.amount_clp,
-          line.liters
+          line.liters,
+          line.source ?? null,
+          line.status ?? null
         );
       }
 
