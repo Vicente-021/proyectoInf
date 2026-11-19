@@ -2,6 +2,12 @@
 
 Índice de la evidencia que respalda la entrega E3.
 
+## Funcionalidades nuevas
+
+| Archivo | Contenido |
+|---|---|
+| `rf13_rf14.md` | Administración de roles y rectificación de consolidaciones |
+
 ## Verificación y RNF
 
 | Archivo | Contenido |

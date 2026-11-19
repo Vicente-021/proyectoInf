@@ -674,3 +674,296 @@ test('crear consolidación valida cliente, período y estado', async (t) => {
   });
   assert.equal(approved.status, 409);
 });
+
+async function createAndApprove(base, analyst, approver, clientId = 'CLI-C') {
+  const created = await api(base, '/api/consolidations', {
+    method: 'POST',
+    cookie: analyst,
+    body: { client_id: clientId, period: '2026-05' }
+  });
+  assert.equal(created.status, 201);
+  const consolidation = await created.json();
+  const submitted = await api(base, `/api/consolidations/${consolidation.id}/submit`, {
+    method: 'POST',
+    cookie: analyst
+  });
+  assert.equal(submitted.status, 200);
+  const approved = await api(base, `/api/consolidations/${consolidation.id}/approve`, {
+    method: 'POST',
+    cookie: approver
+  });
+  assert.equal(approved.status, 200);
+  return consolidation.id;
+}
+
+test('solo el administrador puede consultar y cambiar roles', async (t) => {
+  const { base } = await withServer(t);
+  const analyst = await login(base, 'u-analista');
+  const admin = await login(base, 'u-admin');
+
+  const denied = await api(base, '/api/admin/users', { cookie: analyst });
+  assert.equal(denied.status, 403);
+
+  const list = await api(base, '/api/admin/users', { cookie: admin });
+  assert.equal(list.status, 200);
+  const body = await list.json();
+  assert.equal(body.users.length, 4);
+  assert.ok(body.users.some((user) => user.id === 'u-admin' && user.is_admin === 1));
+  assert.ok(body.users.some((user) => user.id === 'u-sinrol' && user.role === null));
+});
+
+test('el cambio de rol se aplica a una sesión ya iniciada y queda auditado', async (t) => {
+  const { base } = await withServer(t);
+  const admin = await login(base, 'u-admin');
+  const noRole = await login(base, 'u-sinrol');
+
+  const before = await api(base, '/api/clients', { cookie: noRole });
+  assert.equal(before.status, 403);
+
+  const assigned = await api(base, '/api/admin/users/u-sinrol', {
+    method: 'PATCH',
+    cookie: admin,
+    body: { role: 'analista', is_admin: false, reason: 'Incorporación al área Marine' }
+  });
+  assert.equal(assigned.status, 200);
+  assert.equal((await assigned.json()).user.role, 'analista');
+
+  const after = await api(base, '/api/clients', { cookie: noRole });
+  assert.equal(after.status, 200);
+
+  const revoked = await api(base, '/api/admin/users/u-sinrol', {
+    method: 'PATCH',
+    cookie: admin,
+    body: { role: null, is_admin: false, reason: 'Término de la asignación temporal' }
+  });
+  assert.equal(revoked.status, 200);
+
+  const deniedAgain = await api(base, '/api/clients', { cookie: noRole });
+  assert.equal(deniedAgain.status, 403);
+
+  const audit = await api(base, '/api/audit?limit=20', { cookie: admin }).then((r) => r.json());
+  const change = audit.events.find((event) => event.action === 'user.roles_updated');
+  assert.ok(change);
+  assert.equal(change.entity_id, 'u-sinrol');
+  assert.match(change.reason, /asignación/);
+  assert.match(change.before_value, /analista/);
+  assert.match(change.after_value, /null/);
+});
+
+test('el administrador no puede cambiar su propio rol ni dejar el sistema sin administrador', async (t) => {
+  const { base } = await withServer(t);
+  const admin = await login(base, 'u-admin');
+
+  const selfRole = await api(base, '/api/admin/users/u-admin', {
+    method: 'PATCH',
+    cookie: admin,
+    body: { role: 'analista', is_admin: true, reason: 'Intento de autoasignación' }
+  });
+  assert.equal(selfRole.status, 400);
+
+  const lastAdmin = await api(base, '/api/admin/users/u-admin', {
+    method: 'PATCH',
+    cookie: admin,
+    body: { role: null, is_admin: false, reason: 'Intento de quedar sin administrador' }
+  });
+  assert.equal(lastAdmin.status, 409);
+
+  const grant = await api(base, '/api/admin/users/u-aprobador', {
+    method: 'PATCH',
+    cookie: admin,
+    body: { is_admin: true, reason: 'Segundo administrador de respaldo' }
+  });
+  assert.equal(grant.status, 200);
+  const users = await api(base, '/api/admin/users', { cookie: admin }).then((r) => r.json());
+  assert.equal(users.users.filter((user) => user.is_admin === 1).length, 2);
+});
+
+test('la rectificación crea una versión nueva sin tocar la aprobada', async (t) => {
+  const { base } = await withServer(t);
+  const analyst = await login(base, 'u-analista');
+  const approver = await login(base, 'u-aprobador');
+  const v1 = await createAndApprove(base, analyst, approver, 'CLI-C');
+
+  const original = await api(base, `/api/consolidations/${v1}`, { cookie: analyst }).then((r) => r.json());
+  assert.equal(original.version, 1);
+  assert.equal(original.is_current, 1);
+  assert.equal(original.status, 'aprobada');
+
+  const rectification = await api(base, `/api/consolidations/${v1}/rectify`, {
+    method: 'POST',
+    cookie: analyst,
+    body: { reason: 'Se corrigió una lectura después del cierre' }
+  });
+  assert.equal(rectification.status, 201);
+  const v2 = await rectification.json();
+  assert.equal(v2.version, 2);
+  assert.equal(v2.status, 'borrador');
+  assert.equal(v2.is_current, 0);
+  assert.equal(v2.supersedes_id, v1);
+  assert.match(v2.rectification_reason, /corrigió/);
+
+  const stillCurrent = await api(base, `/api/consolidations/${v1}`, { cookie: analyst }).then((r) => r.json());
+  assert.equal(stillCurrent.status, 'aprobada');
+  assert.equal(stillCurrent.is_current, 1);
+  assert.equal(stillCurrent.lines.length, original.lines.length);
+  assert.equal(stillCurrent.total_clp, original.total_clp);
+
+  const duplicate = await api(base, `/api/consolidations/${v1}/rectify`, {
+    method: 'POST',
+    cookie: analyst,
+    body: { reason: 'Segundo intento de rectificación' }
+  });
+  assert.equal(duplicate.status, 409);
+});
+
+test('al aprobar la rectificación se cambia la versión vigente y queda historial', async (t) => {
+  const { base } = await withServer(t);
+  const analyst = await login(base, 'u-analista');
+  const approver = await login(base, 'u-aprobador');
+  const v1 = await createAndApprove(base, analyst, approver, 'CLI-C');
+  const v2 = await api(base, `/api/consolidations/${v1}/rectify`, {
+    method: 'POST',
+    cookie: analyst,
+    body: { reason: 'Rectificación para el historial' }
+  }).then((r) => r.json());
+
+  const submitted = await api(base, `/api/consolidations/${v2.id}/submit`, {
+    method: 'POST',
+    cookie: analyst
+  });
+  assert.equal(submitted.status, 200);
+  const approved = await api(base, `/api/consolidations/${v2.id}/approve`, {
+    method: 'POST',
+    cookie: approver
+  });
+  assert.equal(approved.status, 200);
+  const active = await approved.json();
+  assert.equal(active.status, 'aprobada');
+  assert.equal(active.is_current, 1);
+
+  const previous = await api(base, `/api/consolidations/${v1}`, { cookie: analyst }).then((r) => r.json());
+  assert.equal(previous.status, 'aprobada');
+  assert.equal(previous.is_current, 0);
+
+  const list = await api(base, '/api/consolidations?period=2026-05', { cookie: analyst }).then((r) => r.json());
+  const versions = list.consolidations.filter((item) => item.client_id === 'CLI-C');
+  assert.equal(versions.length, 2);
+  assert.equal(versions.filter((item) => item.is_current === 1 && item.status === 'aprobada').length, 1);
+});
+
+test('el rechazo de la rectificación mantiene vigente la versión anterior', async (t) => {
+  const { base } = await withServer(t);
+  const analyst = await login(base, 'u-analista');
+  const approver = await login(base, 'u-aprobador');
+  const v1 = await createAndApprove(base, analyst, approver, 'CLI-A');
+  const v2 = await api(base, `/api/consolidations/${v1}/rectify`, {
+    method: 'POST',
+    cookie: analyst,
+    body: { reason: 'Rectificación para probar rechazo' }
+  }).then((r) => r.json());
+
+  await api(base, `/api/consolidations/${v2.id}/submit`, { method: 'POST', cookie: analyst });
+  const rejected = await api(base, `/api/consolidations/${v2.id}/reject`, {
+    method: 'POST',
+    cookie: approver,
+    body: { reason: 'El motivo no está respaldado con evidencia' }
+  });
+  assert.equal(rejected.status, 200);
+  const body = await rejected.json();
+  assert.equal(body.status, 'borrador');
+  assert.equal(body.is_current, 0);
+  assert.match(body.reject_reason, /evidencia/);
+
+  const previous = await api(base, `/api/consolidations/${v1}`, { cookie: analyst }).then((r) => r.json());
+  assert.equal(previous.status, 'aprobada');
+  assert.equal(previous.is_current, 1);
+});
+
+test('dos rectificaciones concurrentes solo crean una', async (t) => {
+  const { base } = await withServer(t);
+  const analyst = await login(base, 'u-analista');
+  const approver = await login(base, 'u-aprobador');
+  const v1 = await createAndApprove(base, analyst, approver, 'CLI-C');
+
+  const [first, second] = await Promise.all([
+    api(base, `/api/consolidations/${v1}/rectify`, {
+      method: 'POST',
+      cookie: analyst,
+      body: { reason: 'Rectificación concurrente A' }
+    }),
+    api(base, `/api/consolidations/${v1}/rectify`, {
+      method: 'POST',
+      cookie: analyst,
+      body: { reason: 'Rectificación concurrente B' }
+    })
+  ]);
+  const statuses = [first.status, second.status].sort();
+  assert.deepEqual(statuses, [201, 409]);
+});
+
+test('un borrador desactualizado no se puede enviar hasta regenerarlo', async (t) => {
+  const { base } = await withServer(t);
+  const analyst = await login(base, 'u-analista');
+  const approver = await login(base, 'u-aprobador');
+  const v1 = await createAndApprove(base, analyst, approver, 'CLI-C');
+  const v2 = await api(base, `/api/consolidations/${v1}/rectify`, {
+    method: 'POST',
+    cookie: analyst,
+    body: { reason: 'Rectificación que quedará desactualizada' }
+  }).then((r) => r.json());
+
+  const manual = await api(base, '/api/readings/manual', {
+    method: 'POST',
+    cookie: analyst,
+    body: {
+      meter_id: 'M-02',
+      ts: '2026-05-15',
+      kwh: 850,
+      reason: 'Corrección posterior a la rectificación'
+    }
+  });
+  assert.equal(manual.status, 201);
+
+  const staleSubmit = await api(base, `/api/consolidations/${v2.id}/submit`, {
+    method: 'POST',
+    cookie: analyst
+  });
+  assert.equal(staleSubmit.status, 409);
+
+  const regenerated = await api(base, '/api/consolidations', {
+    method: 'POST',
+    cookie: analyst,
+    body: { client_id: 'CLI-C', period: '2026-05' }
+  });
+  assert.equal(regenerated.status, 201);
+  const regeneratedBody = await regenerated.json();
+  assert.equal(regeneratedBody.id, v2.id);
+
+  const submitted = await api(base, `/api/consolidations/${v2.id}/submit`, {
+    method: 'POST',
+    cookie: analyst
+  });
+  assert.equal(submitted.status, 200);
+});
+
+test('el administrador TI sin rol operativo no aprueba consolidaciones', async (t) => {
+  const { base } = await withServer(t);
+  const analyst = await login(base, 'u-analista');
+  const admin = await login(base, 'u-admin');
+
+  const created = await api(base, '/api/consolidations', {
+    method: 'POST',
+    cookie: analyst,
+    body: { client_id: 'CLI-C', period: '2026-05' }
+  }).then((r) => r.json());
+  await api(base, `/api/consolidations/${created.id}/submit`, {
+    method: 'POST',
+    cookie: analyst
+  });
+
+  const denied = await api(base, `/api/consolidations/${created.id}/approve`, {
+    method: 'POST',
+    cookie: admin
+  });
+  assert.equal(denied.status, 403);
+});

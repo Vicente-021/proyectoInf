@@ -1,4 +1,5 @@
 import { createServer } from 'node:http';
+import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { dirname, extname, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -106,11 +107,23 @@ function toNumber(value) {
   return Number.NaN;
 }
 
-function audit(db, user, action, entity, entityId = null, detail = null) {
+function audit(db, user, action, entity, entityId = null, detail = null, extra = {}) {
+  const role = user.is_admin ? 'administrador' : (user.role ?? 'sin_rol');
   db.prepare(
-    `INSERT INTO audit_events (actor, role, action, entity, entity_id, detail)
-     VALUES (?, ?, ?, ?, ?, ?)`
-  ).run(user.name, user.role, action, entity, entityId == null ? null : String(entityId), detail);
+    `INSERT INTO audit_events
+       (actor, role, action, entity, entity_id, detail, before_value, after_value, reason)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    user.name,
+    role,
+    action,
+    entity,
+    entityId == null ? null : String(entityId),
+    detail,
+    extra.before ?? null,
+    extra.after ?? null,
+    extra.reason ?? null
+  );
 }
 
 function currentUser(db, req) {
@@ -118,14 +131,34 @@ function currentUser(db, req) {
   return getSessionUser(db, sid);
 }
 
-function requireUser(db, req, res, role) {
+function requireUser(db, req, res) {
   const user = currentUser(db, req);
   if (!user) {
     sendError(res, 401, 'no autenticado');
     return null;
   }
+  return user;
+}
+
+function requireOperational(db, req, res, role) {
+  const user = requireUser(db, req, res);
+  if (!user) return null;
+  if (!user.role) {
+    sendError(res, 403, 'la cuenta no tiene rol operativo');
+    return null;
+  }
   if (role && user.role !== role) {
     sendError(res, 403, 'permiso denegado para el rol ' + user.role);
+    return null;
+  }
+  return user;
+}
+
+function requireAdmin(db, req, res) {
+  const user = requireUser(db, req, res);
+  if (!user) return null;
+  if (!user.is_admin) {
+    sendError(res, 403, 'se requiere el rol administrador');
     return null;
   }
   return user;
@@ -188,6 +221,74 @@ function getReadings(db, meterId, period) {
     .all(meterId, bounds.start, bounds.end);
 }
 
+function readingsHash(readings) {
+  return createHash('sha256')
+    .update(
+      readings
+        .map((reading) => `${reading.ts}|${reading.kwh}|${reading.status}|${reading.source}`)
+        .join('\n')
+    )
+    .digest('hex');
+}
+
+function getCurrentConsolidation(db, clientId, period) {
+  return db
+    .prepare(
+      `SELECT * FROM consolidations
+       WHERE client_id = ? AND period = ? AND is_current = 1
+       ORDER BY version DESC LIMIT 1`
+    )
+    .get(clientId, period);
+}
+
+function prepareConsolidationData(db, clientId, period) {
+  const client = getClient(db, clientId);
+  if (!client) return { error: { status: 404, message: 'cliente no encontrado' } };
+  const meter = getMeter(db, clientId);
+  const contract = getContract(db, clientId);
+  const price = getLatestPrice(db);
+  if (!meter || !contract || !price) {
+    return { error: { status: 409, message: 'faltan medidor, contrato o precio' } };
+  }
+  const readings = getReadings(db, meter.id, period);
+  if (!readings.length) {
+    return { error: { status: 400, message: 'no hay lecturas para el período' } };
+  }
+  const result = consolidate({ readings, contract, price });
+  return {
+    client,
+    meter,
+    contract,
+    price,
+    readings,
+    result,
+    hash: readingsHash(readings)
+  };
+}
+
+function consolidationIsStale(db, row) {
+  if (!row || row.status === 'aprobada') return false;
+  const meter = getMeter(db, row.client_id);
+  if (!meter) return true;
+  const readings = getReadings(db, meter.id, row.period);
+  return row.calculation_hash !== readingsHash(readings);
+}
+
+function canEditReadings(db, clientId, period) {
+  const current = getCurrentConsolidation(db, clientId, period);
+  if (!current) return true;
+  if (current.status === 'borrador') return true;
+  if (current.status === 'revision') return false;
+  const openRectification = db
+    .prepare(
+      `SELECT id FROM consolidations
+       WHERE client_id = ? AND period = ? AND supersedes_id IS NOT NULL
+         AND status = 'borrador'`
+    )
+    .get(clientId, period);
+  return Boolean(openRectification);
+}
+
 function getConsolidation(db, consolidationId) {
   return db
     .prepare(
@@ -212,7 +313,22 @@ function consolidationDetail(db, consolidationId) {
     )
     .all(consolidationId);
   const meter = getMeter(db, header.client_id);
-  return { ...header, meter, lines };
+  const current = getCurrentConsolidation(db, header.client_id, header.period);
+  const readings = meter ? getReadings(db, meter.id, header.period) : [];
+  const stale =
+    header.status !== 'aprobada' && header.calculation_hash !== readingsHash(readings);
+  const previous = header.supersedes_id
+    ? getConsolidation(db, header.supersedes_id)
+    : null;
+
+  return {
+    ...header,
+    meter,
+    lines,
+    is_current: current?.id === header.id ? 1 : header.is_current,
+    is_stale: stale,
+    previous
+  };
 }
 
 function getAlerts(db, { status = 'open', clientId = null } = {}) {
@@ -263,7 +379,7 @@ function getAlertDetail(db, alertId) {
   const consolidation = period
     ? db
         .prepare(
-          'SELECT * FROM consolidations WHERE client_id = ? AND period = ? ORDER BY id DESC LIMIT 1'
+          'SELECT * FROM consolidations WHERE client_id = ? AND period = ? AND is_current = 1 ORDER BY id DESC LIMIT 1'
         )
         .get(alert.client_id, period) ?? null
     : null;
@@ -315,18 +431,12 @@ async function handle(db, req, res) {
       return sendError(res, 401, 'credenciales inválidas');
     }
     const sid = createSession(db, row.id);
-    audit(
-      db,
-      { id: row.id, name: row.name, role: row.role },
-      'auth.login',
-      'user',
-      row.id,
-      null
-    );
+    const sessionUser = { id: row.id, name: row.name, role: row.role, is_admin: row.is_admin };
+    audit(db, sessionUser, 'auth.login', 'user', row.id, null);
     return sendJson(
       res,
       200,
-      { user: { id: row.id, name: row.name, role: row.role } },
+      { user: sessionUser },
       { 'Set-Cookie': sessionCookie(sid) }
     );
   }
@@ -345,6 +455,103 @@ async function handle(db, req, res) {
     return sendJson(res, 200, { user });
   }
 
+  if (method === 'GET' && url.pathname === '/api/admin/users') {
+    const admin = requireAdmin(db, req, res);
+    if (!admin) return;
+    const users = db
+      .prepare('SELECT id, name, role, is_admin FROM users ORDER BY id')
+      .all();
+    return sendJson(res, 200, { users });
+  }
+
+  const adminUserMatch = url.pathname.match(/^\/api\/admin\/users\/([^/]+)$/);
+  if (method === 'PATCH' && adminUserMatch) {
+    const admin = requireAdmin(db, req, res);
+    if (!admin) return;
+    let body;
+    try {
+      body = await readJson(req);
+    } catch (error) {
+      return sendError(res, 400, error.message);
+    }
+
+    const targetId = decodeURIComponent(adminUserMatch[1]);
+    const target = db.prepare('SELECT * FROM users WHERE id = ?').get(targetId);
+    if (!target) return sendError(res, 404, 'cuenta no encontrada');
+
+    const reason = String(body.reason ?? '').trim();
+    if (reason.length < 5) {
+      return sendError(res, 400, 'el motivo del cambio es obligatorio');
+    }
+
+    let role = target.role;
+    if (body.role !== undefined) {
+      if (body.role === null || body.role === '' || body.role === 'sin_rol') {
+        role = null;
+      } else if (['analista', 'aprobador'].includes(body.role)) {
+        role = body.role;
+      } else {
+        return sendError(res, 400, 'rol operativo inválido');
+      }
+    }
+
+    let isAdmin = target.is_admin;
+    if (body.is_admin !== undefined) {
+      isAdmin = body.is_admin === true || body.is_admin === 1 ? 1 : 0;
+    }
+
+    if (targetId === admin.id && role !== target.role) {
+      return sendError(res, 400, 'no puede cambiar su propio rol operativo');
+    }
+
+    if (role === target.role && isAdmin === target.is_admin) {
+      return sendError(res, 400, 'el cambio no modifica la cuenta');
+    }
+
+    if (target.is_admin === 1 && isAdmin === 0) {
+      const admins = db
+        .prepare('SELECT COUNT(*) AS n FROM users WHERE is_admin = 1')
+        .get().n;
+      if (admins <= 1) {
+        return sendError(res, 409, 'no se puede dejar el sistema sin administrador');
+      }
+    }
+
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      db.prepare('UPDATE users SET role = ?, is_admin = ? WHERE id = ?').run(
+        role,
+        isAdmin,
+        targetId
+      );
+      audit(
+        db,
+        admin,
+        'user.roles_updated',
+        'user',
+        targetId,
+        `Rol: ${target.role ?? 'sin rol'} -> ${role ?? 'sin rol'}; admin: ${target.is_admin} -> ${isAdmin}; motivo: ${reason}`,
+        {
+          before: JSON.stringify({ role: target.role, is_admin: target.is_admin }),
+          after: JSON.stringify({ role, is_admin: isAdmin }),
+          reason
+        }
+      );
+      db.exec('COMMIT');
+    } catch (error) {
+      db.exec('ROLLBACK');
+      throw error;
+    }
+
+    return sendJson(res, 200, {
+      user: db.prepare('SELECT id, name, role, is_admin FROM users WHERE id = ?').get(targetId)
+    });
+  }
+
+  if (!user.role && url.pathname !== '/api/audit') {
+    return sendError(res, 403, 'la cuenta no tiene rol operativo');
+  }
+
   if (method === 'GET' && url.pathname === '/api/summary') {
     const period = url.searchParams.get('period') ?? defaultPeriod(db);
     if (!period) return sendError(res, 400, 'no hay período configurado');
@@ -361,7 +568,7 @@ async function handle(db, req, res) {
         .get(bounds.start, bounds.end).total ?? 0;
 
     const statuses = db
-      .prepare('SELECT status, COUNT(*) AS n FROM consolidations WHERE period = ? GROUP BY status')
+      .prepare('SELECT status, COUNT(*) AS n FROM consolidations WHERE period = ? AND is_current = 1 GROUP BY status')
       .all(period);
 
     return sendJson(res, 200, {
@@ -396,7 +603,8 @@ async function handle(db, req, res) {
                 (SELECT COUNT(*) FROM alerts a
                  WHERE a.client_id = c.id AND a.status = 'open') AS open_alerts,
                 (SELECT co.status FROM consolidations co
-                 WHERE co.client_id = c.id AND co.period = ? ORDER BY co.id DESC LIMIT 1) AS consolidation_status
+                 WHERE co.client_id = c.id AND co.period = ? AND co.is_current = 1
+                 ORDER BY co.version DESC LIMIT 1) AS consolidation_status
          FROM clients c
          JOIN meters m ON m.client_id = c.id
          ORDER BY c.id`
@@ -438,7 +646,7 @@ async function handle(db, req, res) {
       alerts: getAlerts(db, { status: 'open', clientId: client.id }),
       consolidation:
         db
-          .prepare('SELECT * FROM consolidations WHERE client_id = ? AND period = ? ORDER BY id DESC LIMIT 1')
+          .prepare('SELECT * FROM consolidations WHERE client_id = ? AND period = ? AND is_current = 1 ORDER BY id DESC LIMIT 1')
           .get(client.id, period) ?? null
     });
   }
@@ -549,7 +757,7 @@ async function handle(db, req, res) {
 
   // ---------- Escritura ----------
   if (method === 'POST' && url.pathname === '/api/consolidations') {
-    const authUser = requireUser(db, req, res, 'analista');
+    const authUser = requireOperational(db, req, res, 'analista');
     if (!authUser) return;
     let body;
     try {
@@ -563,28 +771,42 @@ async function handle(db, req, res) {
       return sendError(res, 400, 'client_id y period son obligatorios');
     }
 
-    const client = getClient(db, clientId);
-    const meter = getMeter(db, clientId);
-    const contract = getContract(db, clientId);
-    const price = getLatestPrice(db);
-    if (!client) return sendError(res, 404, 'cliente no encontrado');
-    if (!meter || !contract || !price) {
-      return sendError(res, 409, 'faltan medidor, contrato o precio');
+    const prepared = prepareConsolidationData(db, clientId, period);
+    if (prepared.error) {
+      return sendError(res, prepared.error.status, prepared.error.message);
     }
-    const readings = getReadings(db, meter.id, period);
-    if (!readings.length) return sendError(res, 400, 'no hay lecturas para el período');
+    const { result, hash } = prepared;
 
-    const existing = db
-      .prepare('SELECT * FROM consolidations WHERE client_id = ? AND period = ? ORDER BY id DESC LIMIT 1')
+    const current = getCurrentConsolidation(db, clientId, period);
+    const openRectification = db
+      .prepare(
+        `SELECT * FROM consolidations
+         WHERE client_id = ? AND period = ? AND supersedes_id IS NOT NULL
+           AND status IN ('borrador', 'revision')
+         ORDER BY version DESC LIMIT 1`
+      )
       .get(clientId, period);
-    if (existing?.status === 'aprobada') {
-      return sendError(res, 409, 'la consolidación está aprobada y es inmutable');
-    }
-    if (existing?.status === 'revision') {
-      return sendError(res, 409, 'la consolidación está en revisión');
+
+    let existing = null;
+    if (openRectification) {
+      if (openRectification.status === 'revision') {
+        return sendError(res, 409, 'la rectificación está en revisión');
+      }
+      existing = openRectification;
+    } else if (current) {
+      if (current.status === 'aprobada') {
+        return sendError(
+          res,
+          409,
+          'la consolidación está aprobada; use Rectificar para crear una nueva versión'
+        );
+      }
+      if (current.status === 'revision') {
+        return sendError(res, 409, 'la consolidación está en revisión');
+      }
+      existing = current;
     }
 
-    const result = consolidate({ readings, contract, price });
     let consolidationId;
     db.exec('BEGIN IMMEDIATE');
     try {
@@ -592,9 +814,17 @@ async function handle(db, req, res) {
         consolidationId = existing.id;
         db.prepare(
           `UPDATE consolidations
-           SET total_kwh = ?, total_liters = ?, total_clp = ?, reject_reason = NULL
+           SET total_kwh = ?, total_liters = ?, total_clp = ?,
+               reject_reason = NULL, calculation_hash = ?,
+               calculated_at = datetime('now')
            WHERE id = ?`
-        ).run(result.totalKwh, result.totalLiters, result.totalClp, consolidationId);
+        ).run(
+          result.totalKwh,
+          result.totalLiters,
+          result.totalClp,
+          hash,
+          consolidationId
+        );
         db.prepare('DELETE FROM consolidation_lines WHERE consolidation_id = ?').run(
           consolidationId
         );
@@ -602,10 +832,19 @@ async function handle(db, req, res) {
         const info = db
           .prepare(
             `INSERT INTO consolidations
-               (client_id, period, total_kwh, total_liters, total_clp, status)
-             VALUES (?, ?, ?, ?, ?, 'borrador')`
+               (client_id, period, version, is_current,
+                total_kwh, total_liters, total_clp, status,
+                calculation_hash, calculated_at)
+             VALUES (?, ?, 1, 1, ?, ?, ?, 'borrador', ?, datetime('now'))`
           )
-          .run(clientId, period, result.totalKwh, result.totalLiters, result.totalClp);
+          .run(
+            clientId,
+            period,
+            result.totalKwh,
+            result.totalLiters,
+            result.totalClp,
+            hash
+          );
         consolidationId = Number(info.lastInsertRowid);
       }
 
@@ -634,7 +873,7 @@ async function handle(db, req, res) {
         existing ? 'consolidation.recalculated' : 'consolidation.created',
         'consolidation',
         consolidationId,
-        `${clientId} ${period}: ${result.totalKwh} kWh, ${result.totalClp} CLP`
+        `${clientId} ${period}: v${existing?.version ?? 1}, ${result.totalKwh} kWh, ${result.totalClp} CLP`
       );
       db.exec('COMMIT');
     } catch (error) {
@@ -645,9 +884,130 @@ async function handle(db, req, res) {
     return sendJson(res, 201, consolidationDetail(db, consolidationId));
   }
 
+  const rectifyMatch = url.pathname.match(/^\/api\/consolidations\/(\d+)\/rectify$/);
+  if (method === 'POST' && rectifyMatch) {
+    const authUser = requireOperational(db, req, res, 'analista');
+    if (!authUser) return;
+    let body;
+    try {
+      body = await readJson(req);
+    } catch (error) {
+      return sendError(res, 400, error.message);
+    }
+    const reason = String(body.reason ?? '').trim();
+    if (reason.length < 5) {
+      return sendError(res, 400, 'el motivo de la rectificación es obligatorio');
+    }
+
+    const sourceId = Number(rectifyMatch[1]);
+    const source = getConsolidation(db, sourceId);
+    if (!source) return sendError(res, 404, 'consolidación no encontrada');
+    if (source.status !== 'aprobada' || source.is_current !== 1) {
+      return sendError(res, 409, 'solo se puede rectificar la versión aprobada vigente');
+    }
+
+    const open = db
+      .prepare(
+        `SELECT * FROM consolidations
+         WHERE client_id = ? AND period = ? AND supersedes_id IS NOT NULL
+           AND status IN ('borrador', 'revision')`
+      )
+      .get(source.client_id, source.period);
+    if (open) {
+      return sendError(res, 409, 'ya existe una rectificación abierta para este período');
+    }
+
+    let newId;
+    let version;
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      const prepared = prepareConsolidationData(db, source.client_id, source.period);
+      if (prepared.error) {
+        db.exec('ROLLBACK');
+        return sendError(res, prepared.error.status, prepared.error.message);
+      }
+      const { result, hash } = prepared;
+      version =
+        Number(
+          db
+            .prepare(
+              'SELECT COALESCE(MAX(version), 0) AS v FROM consolidations WHERE client_id = ? AND period = ?'
+            )
+            .get(source.client_id, source.period).v
+        ) + 1;
+
+      const info = db
+        .prepare(
+          `INSERT INTO consolidations
+             (client_id, period, version, supersedes_id, is_current,
+              rectification_reason, oc_reference, calculation_hash, calculated_at,
+              total_kwh, total_liters, total_clp, status)
+           VALUES (?, ?, ?, ?, 0, ?, ?, ?, datetime('now'), ?, ?, ?, 'borrador')`
+        )
+        .run(
+          source.client_id,
+          source.period,
+          version,
+          source.id,
+          reason,
+          source.oc_reference ?? null,
+          hash,
+          result.totalKwh,
+          result.totalLiters,
+          result.totalClp
+        );
+      newId = Number(info.lastInsertRowid);
+
+      const insertLine = db.prepare(
+        `INSERT INTO consolidation_lines
+           (consolidation_id, reading_id, kwh, price_usd_per_kwh, exchange_rate,
+            factor_l_per_kwh, amount_clp, liters)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+      );
+      for (const line of result.lines) {
+        insertLine.run(
+          newId,
+          line.reading_id,
+          line.kwh,
+          line.price_usd_per_kwh,
+          line.exchange_rate,
+          line.factor_l_per_kwh,
+          line.amount_clp,
+          line.liters
+        );
+      }
+
+      audit(
+        db,
+        authUser,
+        'consolidation.rectification_requested',
+        'consolidation',
+        source.id,
+        `v${source.version} -> v${version}. Motivo: ${reason}`
+      );
+      audit(
+        db,
+        authUser,
+        'consolidation.created',
+        'consolidation',
+        newId,
+        `v${version} de ${source.client_id} ${source.period}; reemplaza a v${source.version}`
+      );
+      db.exec('COMMIT');
+    } catch (error) {
+      db.exec('ROLLBACK');
+      if (String(error.message).includes('UNIQUE')) {
+        return sendError(res, 409, 'ya existe una rectificación abierta para este período');
+      }
+      throw error;
+    }
+
+    return sendJson(res, 201, consolidationDetail(db, newId));
+  }
+
   const submitMatch = url.pathname.match(/^\/api\/consolidations\/(\d+)\/submit$/);
   if (method === 'POST' && submitMatch) {
-    const authUser = requireUser(db, req, res, 'analista');
+    const authUser = requireOperational(db, req, res, 'analista');
     if (!authUser) return;
     const id = Number(submitMatch[1]);
     const row = getConsolidation(db, id);
@@ -664,17 +1024,37 @@ async function handle(db, req, res) {
     if (openCritical.length) {
       return sendError(res, 409, 'hay alertas críticas abiertas', { alerts: openCritical });
     }
+    if (consolidationIsStale(db, row)) {
+      return sendError(
+        res,
+        409,
+        'el cálculo está desactualizado; regenere la consolidación antes de enviarla'
+      );
+    }
+    if (row.supersedes_id) {
+      const previous = getConsolidation(db, row.supersedes_id);
+      if (!previous || previous.status !== 'aprobada' || previous.is_current !== 1) {
+        return sendError(res, 409, 'la versión anterior ya no es la vigente');
+      }
+    }
 
     db.prepare(
       `UPDATE consolidations SET status = 'revision', reject_reason = NULL WHERE id = ?`
     ).run(id);
-    audit(db, authUser, 'consolidation.submitted', 'consolidation', id, null);
+    audit(
+      db,
+      authUser,
+      'consolidation.submitted',
+      'consolidation',
+      id,
+      `v${row.version}`
+    );
     return sendJson(res, 200, consolidationDetail(db, id));
   }
 
   const approveMatch = url.pathname.match(/^\/api\/consolidations\/(\d+)\/approve$/);
   if (method === 'POST' && approveMatch) {
-    const authUser = requireUser(db, req, res, 'aprobador');
+    const authUser = requireOperational(db, req, res, 'aprobador');
     if (!authUser) return;
     const id = Number(approveMatch[1]);
     const row = getConsolidation(db, id);
@@ -691,19 +1071,76 @@ async function handle(db, req, res) {
     if (openCritical.length) {
       return sendError(res, 409, 'hay alertas críticas abiertas', { alerts: openCritical });
     }
+    if (consolidationIsStale(db, row)) {
+      return sendError(
+        res,
+        409,
+        'el cálculo está desactualizado; regenere y vuelva a enviar la consolidación'
+      );
+    }
 
-    db.prepare(
-      `UPDATE consolidations
-       SET status = 'aprobada', approved_at = datetime('now'), approved_by = ?
-       WHERE id = ?`
-    ).run(authUser.name, id);
-    audit(db, authUser, 'consolidation.approved', 'consolidation', id, null);
+    let previous = null;
+    if (row.supersedes_id) {
+      previous = getConsolidation(db, row.supersedes_id);
+      if (!previous || previous.status !== 'aprobada' || previous.is_current !== 1) {
+        return sendError(res, 409, 'la versión anterior ya no es la vigente');
+      }
+    }
+
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      if (previous) {
+        const deactivated = db
+          .prepare(
+            'UPDATE consolidations SET is_current = 0 WHERE id = ? AND is_current = 1'
+          )
+          .run(previous.id).changes;
+        if (deactivated !== 1) {
+          db.exec('ROLLBACK');
+          return sendError(res, 409, 'la versión anterior cambió durante la aprobación');
+        }
+      }
+
+      db.prepare(
+        `UPDATE consolidations
+         SET status = 'aprobada', is_current = 1,
+             approved_at = datetime('now'), approved_by = ?
+         WHERE id = ?`
+      ).run(authUser.name, id);
+
+      audit(
+        db,
+        authUser,
+        'consolidation.approved',
+        'consolidation',
+        id,
+        `v${row.version}${previous ? `; reemplaza a v${previous.version}` : ''}`
+      );
+      if (previous) {
+        audit(
+          db,
+          authUser,
+          'consolidation.version_activated',
+          'consolidation',
+          id,
+          `v${row.version} vigente; v${previous.version} queda histórica`
+        );
+      }
+      db.exec('COMMIT');
+    } catch (error) {
+      db.exec('ROLLBACK');
+      if (String(error.message).includes('UNIQUE')) {
+        return sendError(res, 409, 'ya existe otra versión aprobada vigente');
+      }
+      throw error;
+    }
+
     return sendJson(res, 200, consolidationDetail(db, id));
   }
 
   const rejectMatch = url.pathname.match(/^\/api\/consolidations\/(\d+)\/reject$/);
   if (method === 'POST' && rejectMatch) {
-    const authUser = requireUser(db, req, res, 'aprobador');
+    const authUser = requireOperational(db, req, res, 'aprobador');
     if (!authUser) return;
     let body;
     try {
@@ -732,7 +1169,7 @@ async function handle(db, req, res) {
   }
 
   if (method === 'POST' && url.pathname === '/api/readings/manual') {
-    const authUser = requireUser(db, req, res, 'analista');
+    const authUser = requireOperational(db, req, res, 'analista');
     if (!authUser) return;
     let body;
     try {
@@ -759,14 +1196,11 @@ async function handle(db, req, res) {
     if (!meter) return sendError(res, 404, 'medidor no encontrado');
 
     const period = ts.slice(0, 7);
-    const consolidation = db
-      .prepare('SELECT * FROM consolidations WHERE client_id = ? AND period = ? ORDER BY id DESC LIMIT 1')
-      .get(meter.client_id, period);
-    if (consolidation && consolidation.status !== 'borrador') {
+    if (!canEditReadings(db, meter.client_id, period)) {
       return sendError(
         res,
         409,
-        `no se puede modificar una lectura con la consolidación en estado ${consolidation.status}`
+        'no se puede modificar una lectura: la consolidación está en revisión o aprobada y no tiene una rectificación en borrador'
       );
     }
 
@@ -822,7 +1256,7 @@ async function handle(db, req, res) {
 
   const correctAlertMatch = url.pathname.match(/^\/api\/alerts\/(\d+)\/correct$/);
   if (method === 'POST' && correctAlertMatch) {
-    const authUser = requireUser(db, req, res, 'analista');
+    const authUser = requireOperational(db, req, res, 'analista');
     if (!authUser) return;
     let body;
     try {
@@ -880,16 +1314,11 @@ async function handle(db, req, res) {
     }
 
     const period = ts.slice(0, 7);
-    const consolidation = db
-      .prepare(
-        'SELECT * FROM consolidations WHERE client_id = ? AND period = ? ORDER BY id DESC LIMIT 1'
-      )
-      .get(alert.client_id, period);
-    if (consolidation && consolidation.status !== 'borrador') {
+    if (!canEditReadings(db, alert.client_id, period)) {
       return sendError(
         res,
         409,
-        `no se puede corregir una medición con la consolidación en estado ${consolidation.status}`
+        'no se puede corregir una medición: la consolidación está en revisión o aprobada y no tiene una rectificación en borrador'
       );
     }
 
@@ -946,7 +1375,7 @@ async function handle(db, req, res) {
 
   const resolveAlertMatch = url.pathname.match(/^\/api\/alerts\/(\d+)\/resolve$/);
   if (method === 'POST' && resolveAlertMatch) {
-    const authUser = requireUser(db, req, res, 'analista');
+    const authUser = requireOperational(db, req, res, 'analista');
     if (!authUser) return;
     let body;
     try {

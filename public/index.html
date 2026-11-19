@@ -25,7 +25,9 @@
 
       <div class="login-hint">
         <b>Demo:</b> <code>u-analista</code> / <code>demo</code> &nbsp;·&nbsp;
-        <code>u-aprobador</code> / <code>demo</code>
+        <code>u-aprobador</code> / <code>demo</code> &nbsp;·&nbsp;
+        <code>u-admin</code> / <code>demo</code><br>
+        <span class="muted">Sin rol: <code>u-sinrol</code> / <code>demo</code></span>
       </div>
     </form>
   </div>
@@ -54,6 +56,7 @@
         <button class="menu-item" type="button" data-view="clientes">Clientes</button>
         <button class="menu-item" type="button" data-view="alertas">Alertas</button>
         <button class="menu-item" type="button" data-view="auditoria">Auditoría</button>
+        <button class="menu-item hidden" id="menu-admin" type="button" data-view="admin">Administración</button>
       </nav>
 
       <main class="content">
@@ -241,6 +244,36 @@
           <div id="auditoria-list" class="panel"></div>
         </section>
 
+        <!-- ===================== Sin rol ===================== -->
+        <section id="view-sinrol" class="view hidden">
+          <div class="panel" style="max-width:620px; margin:40px auto; text-align:center;">
+            <h2>Cuenta sin rol operativo</h2>
+            <p class="muted" style="margin:12px 0 18px;">
+              Tu cuenta está autenticada, pero no tiene rol de analista ni aprobador.
+              Pide al administrador TI que asigne un rol operativo.
+            </p>
+            <button class="btn btn-primary" id="btn-retry-role" type="button">Reintentar</button>
+          </div>
+        </section>
+
+        <!-- ===================== Administración ===================== -->
+        <section id="view-admin" class="view hidden">
+          <div class="header-box">
+            <div>
+              <h2>Administración de cuentas</h2>
+              <p class="muted">Solo el administrador TI puede asignar o revocar roles operativos.</p>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="panel-head">
+              <h3>Cuentas y permisos</h3>
+              <span class="panel-sub">Los cambios rigen desde la siguiente solicitud</span>
+            </div>
+            <div id="admin-users" class="table-wrap"></div>
+            <p class="footnote">Una cuenta sin rol operativo no puede ejecutar acciones de negocio. La aprobación exige el rol aprobador.</p>
+          </div>
+        </section>
+
       </main>
     </div>
   </div>
@@ -321,6 +354,39 @@
     <div class="dialog-actions">
       <button class="btn" type="button" data-close="dlg-correct">Cancelar</button>
       <button class="btn btn-primary" id="correct-save" type="button">Guardar corrección</button>
+    </div>
+  </dialog>
+
+  <dialog id="dlg-role">
+    <h3 id="role-title">Editar cuenta</h3>
+    <p class="muted" id="role-meta">—</p>
+    <label for="role-select">Rol operativo</label>
+    <select id="role-select" class="select">
+      <option value="">Sin rol operativo</option>
+      <option value="analista">Analista</option>
+      <option value="aprobador">Aprobador</option>
+    </select>
+    <label class="check-row" for="role-admin">
+      <input type="checkbox" id="role-admin"> Administrador TI
+    </label>
+    <label for="role-reason">Motivo del cambio</label>
+    <textarea id="role-reason" placeholder="Ej.: incorporación al área Marine; cambio de responsabilidad"></textarea>
+    <div id="role-error" class="form-error hidden"></div>
+    <div class="dialog-actions">
+      <button class="btn" type="button" data-close="dlg-role">Cancelar</button>
+      <button class="btn btn-primary" id="role-save" type="button">Guardar cambio</button>
+    </div>
+  </dialog>
+
+  <dialog id="dlg-rectify">
+    <h3>Rectificar consolidación aprobada</h3>
+    <p class="muted" id="rectify-meta">—</p>
+    <label for="rectify-reason">Motivo de la rectificación</label>
+    <textarea id="rectify-reason" placeholder="Ej.: se corrigió una lectura después del cierre; se requiere nueva versión"></textarea>
+    <div id="rectify-error" class="form-error hidden"></div>
+    <div class="dialog-actions">
+      <button class="btn" type="button" data-close="dlg-rectify">Cancelar</button>
+      <button class="btn btn-primary" id="rectify-save" type="button">Crear nueva versión</button>
     </div>
   </dialog>
 

@@ -13,7 +13,7 @@ Incluye el flujo de negocio completo: ingesta, cálculo, consolidación, revisi�
 ```bash
 npm run seed     # crea data/svdm.db y carga el seed
 npm start        # interfaz en http://localhost:3000 y API
-npm test         # 37 pruebas
+npm test         # 47 pruebas
 npm run coverage # cobertura con la herramienta integrada de Node
 ```
 
@@ -41,18 +41,21 @@ La interfaz usa la misma sesión por cookie que la API; no hay datos en memoria 
 | Medición de RNF | `docs/rnf.md` y `docs/mediciones.json` |
 | Ciencias aplicadas | `docs/ciencias.md` y `docs/ciencias.json` |
 | Kit de validación | `docs/validacion/` |
+| RF-13 y RF-14 | `docs/rf13_rf14.md` |
 | Índice de evidencia | `docs/README.md` |
 
-El deck tiene 13 láminas principales (10 minutos) y 8 de respaldo. Se compila con `pdflatex main.tex` dos veces desde `entrega_3/`.
+El deck tiene 13 láminas principales (10 minutos) y 9 de respaldo. Se compila con `pdflatex main.tex` dos veces desde `entrega_3/`.
 
 ## Usuarios de demostración
 
-| Usuario | Rol | Contraseña |
-|---|---|---|
-| `u-analista` | analista | `demo` |
-| `u-aprobador` | aprobador | `demo` |
+| Usuario | Rol operativo | Administrador TI | Contraseña |
+|---|---|---|---|
+| `u-admin` | Sin rol operativo | **Sí** | `demo` |
+| `u-sinrol` | Sin rol | No | `demo` |
+| `u-analista` | analista | No | `demo` |
+| `u-aprobador` | aprobador | No | `demo` |
 
-La sesión usa una cookie `HttpOnly` y dura 8 horas. El hash es SHA-256 **solo para la demo**; en producción corresponde Argon2/scrypt con sal.
+La sesión usa una cookie `HttpOnly` y dura 8 horas. El rol se lee de la base en cada solicitud: un cambio de permisos rige en la siguiente petición, aunque la sesión siga abierta. El hash es SHA-256 **solo para la demo**; en producción corresponde Argon2/scrypt con sal.
 
 ## Datos
 
@@ -82,6 +85,9 @@ Notas de procedencia:
 5. Enviarla a revisión.
 6. Login como `u-aprobador` y aprobar o rechazar con motivo.
 7. Verificar que la consolidación aprobada queda bloqueada y que todo aparece en auditoría.
+8. Como `u-admin`, abrir **Administración**, asignar o revocar un rol y revisar la auditoría del cambio.
+9. Como analista, abrir una consolidación aprobada y usar **Rectificar** con un motivo; mostrar `v2` en borrador mientras `v1` sigue vigente.
+10. Aprobar la rectificación y revisar el historial: `v2` vigente, `v1` histórica.
 
 ## Reglas implementadas
 
@@ -91,6 +97,9 @@ Notas de procedencia:
 - El **ingreso manual o la corrección de una alerta exigen motivo**; la alerta se resuelve cuando no quedan mediciones abiertas.
 - Cada acción de escritura deja un evento en `audit_events` con actor, rol, acción y detalle.
 - Los roles se validan en el servidor: el analista no aprueba y el aprobador no genera.
+- **RF-13:** solo un administrador cambia roles; una cuenta sin rol operativo recibe 403; el último administrador no se puede eliminar.
+- **RF-14:** una consolidación aprobada es inmutable; una rectificación crea una versión nueva, la anterior sigue vigente hasta aprobar el reemplazo y solo existe una versión aprobada vigente por cliente/período.
+- Un borrador con lecturas cambiadas queda **desactualizado** y no se puede enviar hasta regenerarlo.
 
 ## API
 
@@ -116,6 +125,9 @@ Notas de procedencia:
 | POST | `/api/consolidations/:id/reject` | aprobador | `{ reason }` |
 | POST | `/api/readings/manual` | analista | `{ meter_id, ts, kwh, reason }` |
 | GET | `/api/audit?limit=50` | sesión | Registro de auditoría |
+| GET | `/api/admin/users` | administrador | Cuentas y permisos |
+| PATCH | `/api/admin/users/:id` | administrador | `{ role, is_admin, reason }` |
+| POST | `/api/consolidations/:id/rectify` | analista | `{ reason }`; crea la versión siguiente |
 
 Ejemplo con `curl`:
 
@@ -138,8 +150,8 @@ El monto se redondea por línea a 2 decimales y el total es la suma de las líne
 
 ## Pruebas y cobertura
 
-- **37 pruebas**: cálculo, seed, autenticación, permisos, máquina de estados, inmutabilidad, alertas, API e interfaz estática.
-- **91,33 %** de cobertura de línea (servidor: 90,71 %).
+- **47 pruebas**: cálculo, seed, autenticación, permisos, máquina de estados, inmutabilidad, alertas, API e interfaz estática.
+- **91,41 %** de cobertura de línea (servidor: 90,01 %).
 
 ## Evidencia de RNF
 
@@ -157,14 +169,14 @@ Resultados principales de la última corrida:
 
 | RNF | Resultado |
 |---|---|
-| Consolidación mensual (R-1) | p95 **4,55 ms** con 30 líneas; **5,1 ms** con 450.112 filas |
-| Ingesta (R-2) | mediana **9,52 ms** para 869 lecturas |
+| Consolidación mensual (R-1) | p95 **3,9 ms** con 30 líneas; **5,52 ms** con 450.112 filas |
+| Ingesta (R-2) | mediana **9,87 ms** para 869 lecturas |
 | Volumen 5 años (R-3) | **450.112 filas**, 71,0 MB, sin degradar la consolidación |
 | Exactitud (E-1) | **0 líneas** fuera de tolerancia; diferencia total **0,004409 CLP** |
 | Integridad (E-2) | **0 duplicados** antes y después de recargar |
 | RBAC (S-2) | **8/8** controles rol × acción |
 | Auditoría (S-4) | **4/4** acciones críticas registradas |
-| Cobertura (M-1) | global **91,33 %**; cálculo **92,38 %** |
+| Cobertura (M-1) | global **91,41 %**; cálculo **92,38 %** |
 
 Los RNF que dependen de infraestructura o de usuarios (MFA, TLS, RPO/RTO, WCAG, validación) quedan declarados como parciales o pendientes en `docs/rnf.md`.
 

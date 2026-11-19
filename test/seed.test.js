@@ -135,14 +135,19 @@ test('la base rechaza lecturas duplicadas y kWh negativos', () => {
   db.close();
 });
 
-test('el seed crea los dos roles de la demostración', () => {
+test('el seed crea los roles y la cuenta administradora', () => {
   const db = freshDb();
-  const users = db.prepare('SELECT id, role FROM users ORDER BY id').all();
+  const users = db
+    .prepare('SELECT id, role, is_admin FROM users ORDER BY id')
+    .all()
+    .map((user) => [user.id, user.role, user.is_admin]);
 
-  assert.deepEqual(
-    users.map((user) => user.role),
-    ['analista', 'aprobador']
-  );
+  assert.deepEqual(users, [
+    ['u-admin', null, 1],
+    ['u-analista', 'analista', 0],
+    ['u-aprobador', 'aprobador', 0],
+    ['u-sinrol', null, 0]
+  ]);
 
   db.close();
 });

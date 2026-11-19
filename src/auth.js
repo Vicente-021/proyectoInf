@@ -39,7 +39,7 @@ export function getSessionUser(db, sessionId) {
   if (!sessionId) return null;
   const user = db
     .prepare(
-      `SELECT u.id, u.name, u.role
+      `SELECT u.id, u.name, u.role, u.is_admin
        FROM sessions s
        JOIN users u ON u.id = s.user_id
        WHERE s.id = ? AND s.expires_at > datetime('now')`

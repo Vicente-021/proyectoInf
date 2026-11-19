@@ -1,5 +1,9 @@
 const state = {
   user: null,
+  isAdmin: false,
+  adminUsers: [],
+  roleUserId: null,
+  rectifyId: null,
   period: '2026-05',
   view: 'resumen',
   summary: null,
@@ -32,6 +36,9 @@ const ACTION_LABELS = {
   'consolidation.submitted': 'Enviada a revisión',
   'consolidation.approved': 'Aprobada',
   'consolidation.rejected': 'Rechazada',
+  'consolidation.rectification_requested': 'Rectificación solicitada',
+  'consolidation.version_activated': 'Versión activada',
+  'user.roles_updated': 'Permisos actualizados',
   'alert.resolved': 'Alerta resuelta',
   seed: 'Carga inicial'
 };
@@ -129,6 +136,10 @@ async function api(path, options = {}) {
     if (response.status === 401 && !path.includes('/auth/login')) {
       showLogin();
     }
+    if (response.status === 403 && String(data?.error ?? '').includes('rol operativo')) {
+      if (state.user) state.user.role = null;
+      showApp().then(() => showView('sinrol'));
+    }
     throw new ApiError(data?.error ?? `Error ${response.status}`, response.status, data);
   }
   return data;
@@ -146,6 +157,8 @@ function toast(message, type = 'info') {
 
 function showLogin() {
   state.user = null;
+  state.isAdmin = false;
+  state.adminUsers = [];
   $$('dialog').forEach((dialog) => {
     if (dialog.open) dialog.close();
   });
@@ -158,8 +171,20 @@ function showLogin() {
 async function showApp() {
   $('login-screen').classList.add('hidden');
   $('app').classList.remove('hidden');
+  state.isAdmin = Boolean(state.user?.is_admin);
+  const roleLabel = state.isAdmin
+    ? state.user.role
+      ? `Admin · ${state.user.role}`
+      : 'Administrador TI'
+    : state.user?.role ?? 'sin rol';
   $('user-name').textContent = state.user?.name ?? '—';
-  $('user-role').textContent = state.user?.role ?? '—';
+  $('user-role').textContent = roleLabel;
+
+  const limited = !state.user?.role;
+  $$('.menu-item:not(#menu-admin)').forEach((button) => {
+    button.classList.toggle('hidden', limited);
+  });
+  $('menu-admin').classList.toggle('hidden', !state.isAdmin);
 }
 
 function showView(view) {
@@ -178,9 +203,23 @@ function showView(view) {
   if (view === 'alertas') renderAlertas();
   if (view === 'auditoria') renderAuditoria();
   if (view === 'cliente') renderCliente();
+  if (view === 'admin') {
+    loadAdminUsers().then(renderAdmin).catch((error) => toast(error.message, 'error'));
+  }
 }
 
 async function loadAll() {
+  if (!state.user?.role && !state.isAdmin) return;
+  if (state.isAdmin) await loadAdminUsers();
+  if (state.isAdmin && !state.user?.role) {
+    state.summary = null;
+    state.clients = [];
+    state.alerts = [];
+    state.consolidations = [];
+    state.audit = [];
+    renderAdmin();
+    return;
+  }
   const summary = await api('/api/summary');
   state.period = summary.period;
 
@@ -220,6 +259,7 @@ async function loadAll() {
     }
   }
 
+  if (state.isAdmin) renderAdmin();
   renderAll();
 }
 
@@ -310,6 +350,12 @@ function renderResumen() {
     </li>`).join('') || '<li><span class="empty">Sin actividad.</span></li>';
 }
 
+function versionState(item) {
+  if (item.is_current === 1) return { label: 'Vigente', cls: 'badge-ok' };
+  if (item.status === 'aprobada') return { label: 'Histórica', cls: 'badge-info' };
+  return { label: 'En trámite', cls: 'badge-draft' };
+}
+
 function renderConsolidacion() {
   const select = $('consolidacion-client');
   const previous = state.selectedClientId || select.value || state.clients[0]?.id;
@@ -319,6 +365,7 @@ function renderConsolidacion() {
   if (previous) select.value = previous;
 
   const isAnalyst = state.user?.role === 'analista';
+  const isApprover = state.user?.role === 'aprobador';
   $('btn-generate').disabled = !isAnalyst || !state.clients.length;
   $('btn-generate').title = isAnalyst ? '' : 'Solo el analista puede generar consolidaciones';
 
@@ -346,9 +393,9 @@ function renderConsolidacion() {
   const rows = state.consolidations.map((consolidation) => `
     <tr>
       <td>${esc(consolidation.client_name)}</td>
+      <td>v${consolidation.version}${consolidation.is_current ? ' <span class="badge badge-ok">Vigente</span>' : ''}</td>
       <td>${statusBadge(consolidation.status)}</td>
       <td class="num">${fmtNum(consolidation.total_kwh, 0)}</td>
-      <td class="num">${fmtNum(consolidation.total_liters, 0)}</td>
       <td class="num">${fmtClp(consolidation.total_clp)}</td>
       <td><button class="btn btn-sm" type="button" data-consolidation="${consolidation.id}">Ver detalle</button></td>
     </tr>`).join('');
@@ -356,11 +403,11 @@ function renderConsolidacion() {
   $('consolidacion-list').innerHTML = `
     <div class="panel-head">
       <h3>Consolidaciones del período</h3>
-      <span class="panel-sub">${state.consolidations.length} registro(s)</span>
+      <span class="panel-sub">${state.consolidations.length} versión(es)</span>
     </div>
     ${rows
       ? `<div class="table-wrap"><table>
-          <thead><tr><th>Cliente</th><th>Estado</th><th class="num">kWh</th><th class="num">Litros</th><th class="num">CLP</th><th></th></tr></thead>
+          <thead><tr><th>Cliente</th><th>Versión</th><th>Estado</th><th class="num">kWh</th><th class="num">CLP</th><th></th></tr></thead>
           <tbody>${rows}</tbody>
         </table></div>`
       : '<p class="empty">Aún no hay consolidaciones. Selecciona un cliente y genera una.</p>'}`;
@@ -374,18 +421,36 @@ function renderConsolidacion() {
   }
 
   const detailCritical = criticalAlertsFor(detail.client_id);
+  const stale = Boolean(detail.is_stale);
   let actions = '';
-  if (state.user?.role === 'analista' && detail.status === 'borrador') {
-    actions = `<button class="btn btn-primary" type="button" data-action="submit" data-id="${detail.id}" ${detailCritical.length ? 'disabled' : ''}>Enviar a revisión</button>`;
+  if (isAnalyst && detail.status === 'borrador') {
+    actions = `<button class="btn btn-primary" type="button" data-action="submit" data-id="${detail.id}" ${detailCritical.length || stale ? 'disabled' : ''}>Enviar a revisión</button>`;
   }
-  if (state.user?.role === 'aprobador' && detail.status === 'revision') {
+  if (isApprover && detail.status === 'revision') {
     actions = `
-      <button class="btn btn-primary" type="button" data-action="approve" data-id="${detail.id}">Aprobar y enviar a SAP (simulado)</button>
+      <button class="btn btn-primary" type="button" data-action="approve" data-id="${detail.id}" ${stale ? 'disabled' : ''}>Aprobar y enviar a SAP (simulado)</button>
       <button class="btn btn-danger" type="button" data-action="reject" data-id="${detail.id}">Rechazar</button>`;
   }
-  if (detail.status === 'aprobada') {
-    actions = `<span class="badge badge-ok">Aprobada por ${esc(detail.approved_by ?? '—')} · inmutable</span>`;
+  if (isAnalyst && detail.status === 'aprobada' && detail.is_current === 1) {
+    actions += `<button class="btn btn-primary" type="button" data-action="rectify" data-id="${detail.id}">Rectificar</button>`;
   }
+  if (detail.status === 'aprobada') {
+    actions += `<span class="badge ${detail.is_current === 1 ? 'badge-ok' : 'badge-info'}">${detail.is_current === 1 ? 'Vigente' : 'Histórica'}</span>`;
+  }
+
+  const previousVersion = detail.previous;
+  const versions = state.consolidations
+    .filter((item) => item.client_id === detail.client_id && item.period === detail.period)
+    .sort((a, b) => b.version - a.version);
+  const historyRows = versions.map((item) => `
+    <tr>
+      <td>v${item.version}</td>
+      <td>${statusBadge(item.status)}</td>
+      <td>${(() => { const state = versionState(item); return `<span class="badge ${state.cls}">${state.label}</span>`; })()}</td>
+      <td>${esc(item.rectification_reason ?? '—')}</td>
+      <td>${esc(item.approved_by ?? '—')}</td>
+      <td><button class="btn btn-sm" type="button" data-consolidation="${item.id}">Ver</button></td>
+    </tr>`).join('');
 
   const lines = detail.lines.map((line) => `
     <tr>
@@ -402,12 +467,15 @@ function renderConsolidacion() {
     <div class="panel">
       <div class="panel-head">
         <div>
-          <h3>${esc(detail.client_name)} · ${esc(detail.period)}</h3>
-          <p class="muted">Medidor ${esc(detail.meter?.id ?? '—')} · ${esc(detail.meter?.barge ?? '—')}</p>
+          <h3>${esc(detail.client_name)} · ${esc(detail.period)} · v${detail.version}</h3>
+          <p class="muted">Medidor ${esc(detail.meter?.id ?? '—')} · ${esc(detail.meter?.barge ?? '—')} · ${versionState(detail).label === 'Vigente' ? 'Versión vigente' : versionState(detail).label === 'Histórica' ? 'Versión histórica' : 'Versión en trámite'}</p>
         </div>
         <div class="actions-inline">${statusBadge(detail.status)}${actions}</div>
       </div>
+      ${stale ? `<div class="warn-banner"><span><b>Cálculo desactualizado:</b> las lecturas cambiaron después de generar esta versión. Regenera antes de enviarla.</span><button class="link-btn" type="button" data-generate-client="${esc(detail.client_id)}">Regenerar</button></div>` : ''}
+      ${detail.rectification_reason ? `<div class="warn-banner"><span><b>Rectificación de v${previousVersion?.version ?? '—'}:</b> ${esc(detail.rectification_reason)}</span>${previousVersion ? `<button class="link-btn" type="button" data-consolidation="${previousVersion.id}">Ver versión anterior</button>` : ''}</div>` : ''}
       ${detail.reject_reason ? `<div class="warn-banner"><span><b>Devuelta:</b> ${esc(detail.reject_reason)}</span></div>` : ''}
+      ${detail.oc_reference ? `<div class="ok-banner"><span><b>OC:</b> ${esc(detail.oc_reference)} · coordinación con Finanzas pendiente.</span></div>` : ''}
       <div class="cards">
         <div class="card"><div class="card-title">Consumo</div><div class="card-value">${fmtNum(detail.total_kwh, 0)}</div><div class="card-sub">kWh</div></div>
         <div class="card"><div class="card-title">Gas equivalente</div><div class="card-value">${fmtNum(detail.total_liters, 0)}</div><div class="card-sub">litros</div></div>
@@ -418,6 +486,15 @@ function renderConsolidacion() {
         <table>
           <thead><tr><th>Fecha</th><th class="num">kWh</th><th class="num">USD/kWh</th><th class="num">T.C.</th><th class="num">Factor</th><th class="num">CLP</th><th class="num">Litros</th></tr></thead>
           <tbody>${lines}</tbody>
+        </table>
+      </div>
+    </div>
+    <div class="panel" style="margin-top:15px;">
+      <div class="panel-head"><h3>Historial de versiones</h3><span class="panel-sub">${versions.length} versión(es)</span></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Versión</th><th>Estado</th><th>Vigencia</th><th>Motivo de rectificación</th><th>Aprobada por</th><th></th></tr></thead>
+          <tbody>${historyRows}</tbody>
         </table>
       </div>
     </div>`;
@@ -707,6 +784,79 @@ async function saveCorrect() {
   }
 }
 
+async function loadAdminUsers() {
+  const data = await api('/api/admin/users');
+  state.adminUsers = data.users;
+}
+
+function adminRoleLabel(user) {
+  if (user.is_admin && user.role) return `Administrador · ${user.role}`;
+  if (user.is_admin) return 'Administrador TI';
+  if (user.role) return user.role;
+  return 'Sin rol operativo';
+}
+
+function renderAdmin() {
+  const rows = state.adminUsers.map((user) => {
+    const self = user.id === state.user?.id;
+    return `
+      <tr>
+        <td><b>${esc(user.name)}</b><br><span class="muted">${esc(user.id)}</span></td>
+        <td>${user.role ? `<span class="badge badge-info">${esc(user.role)}</span>` : '<span class="badge badge-warn">Sin rol operativo</span>'}</td>
+        <td>${user.is_admin ? '<span class="badge badge-ok">Administrador TI</span>' : '<span class="badge badge-info">No</span>'}</td>
+        <td>${self ? '<span class="badge badge-draft">Tu cuenta</span>' : `<button class="btn btn-sm" type="button" data-role-user="${esc(user.id)}">Editar</button>`}</td>
+      </tr>`;
+  }).join('');
+
+  $('admin-users').innerHTML = rows
+    ? `<table>
+        <thead><tr><th>Cuenta</th><th>Rol operativo</th><th>Administrador</th><th></th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`
+    : '<p class="empty">Sin cuentas.</p>';
+}
+
+function openRoleDialog(userId) {
+  const user = state.adminUsers.find((candidate) => candidate.id === userId);
+  if (!user || user.id === state.user?.id) return;
+  state.roleUserId = user.id;
+  $('role-title').textContent = `Editar ${user.name}`;
+  $('role-meta').textContent = `${user.id} · ${adminRoleLabel(user)}`;
+  $('role-select').value = user.role ?? '';
+  $('role-admin').checked = Boolean(user.is_admin);
+  $('role-reason').value = '';
+  $('role-error').classList.add('hidden');
+  $('dlg-role').showModal();
+  $('role-reason').focus();
+}
+
+async function saveRole() {
+  const error = $('role-error');
+  const reason = $('role-reason').value.trim();
+  if (reason.length < 5) {
+    error.textContent = 'Escribe el motivo del cambio (mínimo 5 caracteres).';
+    error.classList.remove('hidden');
+    return;
+  }
+  try {
+    await api(`/api/admin/users/${encodeURIComponent(state.roleUserId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        role: $('role-select').value || null,
+        is_admin: $('role-admin').checked,
+        reason
+      })
+    });
+    $('dlg-role').close();
+    toast('Permisos actualizados');
+    await loadAdminUsers();
+    renderAdmin();
+  } catch (err) {
+    error.textContent = err.message;
+    error.classList.remove('hidden');
+  }
+}
+
 function renderAuditoria() {
   const rows = state.audit.map((event) => `
     <tr>
@@ -780,6 +930,44 @@ async function approveConsolidation(id) {
     await loadAll();
   } catch (error) {
     toast(error.message, 'error');
+  }
+}
+
+function openRectify(id) {
+  state.rectifyId = Number(id);
+  const detail = state.consolidationDetail;
+  $('rectify-meta').textContent = detail
+    ? `${detail.client_name} · ${detail.period} · reemplaza v${detail.version}`
+    : '—';
+  $('rectify-reason').value = '';
+  $('rectify-error').classList.add('hidden');
+  $('dlg-rectify').showModal();
+  $('rectify-reason').focus();
+}
+
+async function saveRectify() {
+  const error = $('rectify-error');
+  const reason = $('rectify-reason').value.trim();
+  if (reason.length < 5) {
+    error.textContent = 'Escribe el motivo de la rectificación (mínimo 5 caracteres).';
+    error.classList.remove('hidden');
+    return;
+  }
+  try {
+    const detail = await api(`/api/consolidations/${state.rectifyId}/rectify`, {
+      method: 'POST',
+      body: JSON.stringify({ reason })
+    });
+    $('dlg-rectify').close();
+    state.selectedConsolidationId = detail.id;
+    state.consolidationDetail = detail;
+    state.selectedClientId = detail.client_id;
+    await loadAll();
+    showView('consolidacion');
+    toast(`Rectificación creada: v${detail.version} en borrador`);
+  } catch (err) {
+    error.textContent = err.message;
+    error.classList.remove('hidden');
   }
 }
 
@@ -922,7 +1110,13 @@ async function login(event) {
     state.user = data.user;
     await showApp();
     await loadAll();
-    showView('resumen');
+    showView(
+      state.isAdmin && !state.user.role
+        ? 'admin'
+        : !state.user.role
+          ? 'sinrol'
+          : 'resumen'
+    );
   } catch (err) {
     error.textContent = err.message;
     error.classList.remove('hidden');
@@ -939,6 +1133,8 @@ async function logout() {
     // La sesión pudo haber expirado.
   }
   state.user = null;
+  state.isAdmin = false;
+  state.adminUsers = [];
   state.clientDetail = null;
   state.consolidationDetail = null;
   state.selectedConsolidationId = null;
@@ -960,7 +1156,16 @@ function bindEvents() {
   $('consolidacion-client').addEventListener('change', () => {
     const clientId = $('consolidacion-client').value;
     state.selectedClientId = clientId;
-    const existing = state.consolidations.find((item) => item.client_id === clientId);
+    const openRectification = state.consolidations.find(
+      (item) =>
+        item.client_id === clientId &&
+        item.supersedes_id &&
+        ['borrador', 'revision'].includes(item.status)
+    );
+    const current = state.consolidations.find(
+      (item) => item.client_id === clientId && item.is_current === 1
+    );
+    const existing = openRectification ?? current;
     if (existing) {
       openConsolidation(existing.id);
     } else {
@@ -990,6 +1195,9 @@ function bindEvents() {
   $('reject-save').addEventListener('click', saveReject);
   $('resolve-save').addEventListener('click', saveResolve);
   $('correct-save').addEventListener('click', saveCorrect);
+  $('role-save').addEventListener('click', saveRole);
+  $('rectify-save').addEventListener('click', saveRectify);
+  $('btn-retry-role').addEventListener('click', () => window.location.reload());
   $('alert-resolve-note').addEventListener('click', () => {
     if (state.alertDetail) openResolve(state.alertDetail.id);
   });
@@ -998,6 +1206,12 @@ function bindEvents() {
     const go = event.target.closest('[data-go]');
     if (go) {
       showView(go.dataset.go);
+      return;
+    }
+
+    const roleUser = event.target.closest('[data-role-user]');
+    if (roleUser) {
+      openRoleDialog(roleUser.dataset.roleUser);
       return;
     }
 
@@ -1041,6 +1255,7 @@ function bindEvents() {
       if (action.dataset.action === 'submit') submitConsolidation(action.dataset.id);
       if (action.dataset.action === 'approve') approveConsolidation(action.dataset.id);
       if (action.dataset.action === 'reject') openReject(action.dataset.id);
+      if (action.dataset.action === 'rectify') openRectify(action.dataset.id);
       return;
     }
 
@@ -1070,7 +1285,13 @@ async function init() {
     state.user = data.user;
     await showApp();
     await loadAll();
-    showView('resumen');
+    showView(
+      state.isAdmin && !state.user.role
+        ? 'admin'
+        : !state.user.role
+          ? 'sinrol'
+          : 'resumen'
+    );
   } catch {
     showLogin();
   }

@@ -85,19 +85,26 @@ export function migrate(db) {
     );
 
     CREATE TABLE IF NOT EXISTS consolidations (
-      id            INTEGER PRIMARY KEY AUTOINCREMENT,
-      client_id     TEXT NOT NULL REFERENCES clients(id),
-      period        TEXT NOT NULL,
-      total_kwh     REAL NOT NULL,
-      total_liters  REAL NOT NULL,
-      total_clp     REAL NOT NULL,
-      status        TEXT NOT NULL DEFAULT 'borrador'
-                    CHECK (status IN ('borrador', 'revision', 'aprobada')),
-      reject_reason TEXT,
-      approved_at   TEXT,
-      approved_by   TEXT,
-      created_at    TEXT NOT NULL DEFAULT (datetime('now')),
-      UNIQUE (client_id, period)
+      id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+      client_id          TEXT NOT NULL REFERENCES clients(id),
+      period             TEXT NOT NULL,
+      version            INTEGER NOT NULL DEFAULT 1 CHECK (version >= 1),
+      supersedes_id      INTEGER REFERENCES consolidations(id),
+      is_current         INTEGER NOT NULL DEFAULT 1 CHECK (is_current IN (0, 1)),
+      rectification_reason TEXT,
+      oc_reference       TEXT,
+      calculation_hash   TEXT,
+      calculated_at      TEXT,
+      total_kwh          REAL NOT NULL,
+      total_liters       REAL NOT NULL,
+      total_clp          REAL NOT NULL,
+      status             TEXT NOT NULL DEFAULT 'borrador'
+                         CHECK (status IN ('borrador', 'revision', 'aprobada')),
+      reject_reason      TEXT,
+      approved_at        TEXT,
+      approved_by        TEXT,
+      created_at         TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE (client_id, period, version)
     );
 
     CREATE TABLE IF NOT EXISTS consolidation_lines (
@@ -150,21 +157,26 @@ export function migrate(db) {
     CREATE INDEX IF NOT EXISTS idx_alert_items_meter_ts ON alert_items (meter_id, ts);
 
     CREATE TABLE IF NOT EXISTS audit_events (
-      id         INTEGER PRIMARY KEY AUTOINCREMENT,
-      actor      TEXT NOT NULL,
-      role       TEXT NOT NULL,
-      action     TEXT NOT NULL,
-      entity     TEXT NOT NULL,
-      entity_id  TEXT,
-      detail     TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      id           INTEGER PRIMARY KEY AUTOINCREMENT,
+      actor        TEXT NOT NULL,
+      role         TEXT NOT NULL,
+      action       TEXT NOT NULL,
+      entity       TEXT NOT NULL,
+      entity_id    TEXT,
+      detail       TEXT,
+      before_value TEXT,
+      after_value  TEXT,
+      reason       TEXT,
+      created_at   TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
     CREATE TABLE IF NOT EXISTS users (
       id            TEXT PRIMARY KEY,
       name          TEXT NOT NULL,
-      role          TEXT NOT NULL CHECK (role IN ('analista', 'aprobador')),
-      password_hash TEXT NOT NULL
+      role          TEXT CHECK (role IN ('analista', 'aprobador') OR role IS NULL),
+      is_admin      INTEGER NOT NULL DEFAULT 0 CHECK (is_admin IN (0, 1)),
+      password_hash TEXT NOT NULL,
+      created_at    TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
     CREATE TABLE IF NOT EXISTS sessions (
@@ -185,6 +197,116 @@ export function migrate(db) {
   ensureColumn(db, 'clients', 'synthetic', 'INTEGER NOT NULL DEFAULT 0');
   ensureColumn(db, 'alerts', 'ref_ts', 'TEXT');
   ensureAlertItemsSchema(db);
+  ensureAuditSchema(db);
+  ensureUsersSchema(db);
+  ensureConsolidationsSchema(db);
+}
+
+function ensureAuditSchema(db) {
+  ensureColumn(db, 'audit_events', 'before_value', 'TEXT');
+  ensureColumn(db, 'audit_events', 'after_value', 'TEXT');
+  ensureColumn(db, 'audit_events', 'reason', 'TEXT');
+}
+
+function ensureUsersSchema(db) {
+  const columns = db.prepare('PRAGMA table_info(users)').all();
+  const hasAdmin = columns.some((column) => column.name === 'is_admin');
+  const role = columns.find((column) => column.name === 'role');
+  if (hasAdmin && role && role.notnull === 0) return;
+
+  db.exec('PRAGMA foreign_keys = OFF;');
+  try {
+    db.exec('BEGIN IMMEDIATE;');
+    db.exec('DROP TABLE IF EXISTS users_new;');
+    db.exec(`
+      CREATE TABLE users_new (
+        id            TEXT PRIMARY KEY,
+        name          TEXT NOT NULL,
+        role          TEXT CHECK (role IN ('analista', 'aprobador') OR role IS NULL),
+        is_admin      INTEGER NOT NULL DEFAULT 0 CHECK (is_admin IN (0, 1)),
+        password_hash TEXT NOT NULL,
+        created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+    `);
+    db.exec(`
+      INSERT INTO users_new (id, name, role, password_hash, is_admin)
+      SELECT id, name, role, password_hash, 0 FROM users;
+    `);
+    db.exec('DROP TABLE users;');
+    db.exec('ALTER TABLE users_new RENAME TO users;');
+    db.exec('COMMIT;');
+  } catch (error) {
+    db.exec('ROLLBACK;');
+    throw error;
+  } finally {
+    db.exec('PRAGMA foreign_keys = ON;');
+  }
+}
+
+function ensureConsolidationsSchema(db) {
+  const columns = db.prepare('PRAGMA table_info(consolidations)').all();
+  const hasVersion = columns.some((column) => column.name === 'version');
+
+  if (!hasVersion) {
+    db.exec('PRAGMA foreign_keys = OFF;');
+    try {
+      db.exec('BEGIN IMMEDIATE;');
+      db.exec('DROP TABLE IF EXISTS consolidations_new;');
+      db.exec(`
+        CREATE TABLE consolidations_new (
+          id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+          client_id            TEXT NOT NULL REFERENCES clients(id),
+          period               TEXT NOT NULL,
+          version              INTEGER NOT NULL DEFAULT 1 CHECK (version >= 1),
+          supersedes_id        INTEGER REFERENCES consolidations(id),
+          is_current           INTEGER NOT NULL DEFAULT 1 CHECK (is_current IN (0, 1)),
+          rectification_reason TEXT,
+          oc_reference         TEXT,
+          calculation_hash     TEXT,
+          calculated_at        TEXT,
+          total_kwh            REAL NOT NULL,
+          total_liters         REAL NOT NULL,
+          total_clp            REAL NOT NULL,
+          status               TEXT NOT NULL DEFAULT 'borrador'
+                               CHECK (status IN ('borrador', 'revision', 'aprobada')),
+          reject_reason        TEXT,
+          approved_at          TEXT,
+          approved_by          TEXT,
+          created_at           TEXT NOT NULL DEFAULT (datetime('now')),
+          UNIQUE (client_id, period, version)
+        );
+      `);
+      db.exec(`
+        INSERT INTO consolidations_new
+          (id, client_id, period, version, supersedes_id, is_current,
+           total_kwh, total_liters, total_clp, status, reject_reason,
+           approved_at, approved_by, created_at)
+        SELECT id, client_id, period, 1, NULL, 1,
+               total_kwh, total_liters, total_clp, status, reject_reason,
+               approved_at, approved_by, created_at
+        FROM consolidations;
+      `);
+      db.exec('DROP TABLE consolidations;');
+      db.exec('ALTER TABLE consolidations_new RENAME TO consolidations;');
+      db.exec('COMMIT;');
+    } catch (error) {
+      db.exec('ROLLBACK;');
+      throw error;
+    } finally {
+      db.exec('PRAGMA foreign_keys = ON;');
+    }
+  }
+
+  db.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_consolidations_version
+      ON consolidations (client_id, period, version);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_consolidations_current_approved
+      ON consolidations (client_id, period)
+      WHERE is_current = 1 AND status = 'aprobada';
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_consolidations_open_rectification
+      ON consolidations (client_id, period)
+      WHERE supersedes_id IS NOT NULL AND status IN ('borrador', 'revision');
+  `);
 }
 
 function ensureAlertItemsSchema(db) {

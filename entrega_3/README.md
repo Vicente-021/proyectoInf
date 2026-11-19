@@ -4,7 +4,7 @@ Contiene la presentación de E3 y su guion de exposición.
 
 | Archivo | Contenido |
 |---|---|
-| `main.tex` | Fuente Beamer (21 páginas: 13 principales + 8 de respaldo) |
+| `main.tex` | Fuente Beamer (22 páginas: 13 principales + 9 de respaldo) |
 | `main.pdf` | PDF compilado |
 | `guion.md` | Tiempos, expositores, demo y asignación de preguntas |
 | `img/` | Capturas de la interfaz usadas en las láminas |

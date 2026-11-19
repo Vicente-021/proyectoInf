@@ -50,7 +50,7 @@
   \vfill
   \begin{center}
     \small
-    MVP local \textbullet{} 37 pruebas \textbullet{} cobertura 91,33\,\% \textbullet{} 450.112 registros
+    MVP local \textbullet{} 47 pruebas \textbullet{} cobertura 91,41\,\% \textbullet{} 450.112 registros
   \end{center}
 \end{frame}
 
@@ -63,11 +63,11 @@
     \column{0.32\textwidth}
       \begin{block}{Diseño}
         Construido y ejecutándose en local.\\[1mm]
-        RF-1 a RF-10, con roles, persistencia y auditoría.
+        RF-1 a RF-10, RF-13 y RF-14; RF-11 pendiente.
       \end{block}
     \column{0.32\textwidth}
       \begin{block}{Evidencia}
-        37 pruebas y 91,33\,\% de cobertura.\\[1mm]
+        47 pruebas y 91,41\,\% de cobertura.\\[1mm]
         8 RNF medidos y dos ciencias con resultados.
       \end{block}
     \column{0.32\textwidth}
@@ -127,7 +127,7 @@
   \vspace{2mm}
   \begin{block}{Decisión y efecto verificado}
     Se re-dimensionaron RNF-R-1 y RNF-R-3. La consolidación con 450.112 filas tiene
-    p95 de \good{5,1 ms} y la base ocupa 71,0 MB.
+    p95 de \good{5,52 ms} y la base ocupa 71,0 MB.
   \end{block}
   \vspace{1mm}
   {\scriptsize Disparador: el dato real no sostenía el supuesto de una lectura por minuto.}
@@ -154,7 +154,7 @@
   \end{columns}
   \vspace{2mm}
   \begin{block}{Efecto verificado}
-    RNF-R-1 con 5 años: p95 de \warn{46,97 ms} a \good{5,1 ms}.\\
+    RNF-R-1 con 5 años: p95 de \warn{46,97 ms} a \good{5,52 ms}.\\
     El cambio se aplicó en \code{getReadings} y en las consultas del resumen.
   \end{block}
 \end{frame}
@@ -193,16 +193,18 @@
         RF-7 a RF-10 (Should) & \good{Implementadas} \\
         RF-11 (Could) & \warn{Pendiente} \\
         RF-12 (Won't) & \warn{Excluida} \\
+        RF-13 Administración & \good{Implementada} \\
+        RF-14 Rectificación & \good{Implementada} \\
         \bottomrule
       \end{tabular}
       \vspace{1mm}
 
-      {\tiny RF-1/RF-3 usan datos de la planilla, sin WiseData real; RF-2 usa fixture; RF-6 es auth local; RF-7 es simulador; RF-11 está pendiente.}
+      {\tiny RF-1/RF-3 usan datos de planilla; RF-2 fixture; RF-6 auth local; RF-7 simulador; RF-11 pendiente. RF-13/14 con roles técnicos e historial de versiones.}
       \end{block}
   \end{columns}
   \vspace{1mm}
   \begin{block}{Repositorio y calidad}
-    7 commits \textbullet{} CI en GitHub Actions \textbullet{} 37 pruebas \textbullet{} cobertura 91,33\,\%
+    historial de commits \textbullet{} CI en GitHub Actions \textbullet{} 47 pruebas \textbullet{} cobertura 91,41\,\%
   \end{block}
 \end{frame}
 
@@ -275,7 +277,7 @@
   \vspace{2mm}
   \begin{block}{Resultado}
     450.112 filas y 71,0 MB. La consolidación completa (RNF-R-1) queda en
-    \good{5,1 ms} de p95 con 5 años de datos.
+    \good{5,52 ms} de p95 con 5 años de datos.
   \end{block}
   {\scriptsize Medición directa sobre SQLite, 30 corridas por consulta.}
 \end{frame}
@@ -325,19 +327,19 @@
     \toprule
     \textbf{RNF} & \textbf{Objetivo} & \textbf{Valor obtenido} & \textbf{Veredicto} \\
     \midrule
-    R-1 Consolidación & $\leq$ 5 min & 5,1 ms con 450.112 filas & \good{Cumple} \\
-    R-2 Ingesta & $\leq$ 60 s & 9,52 ms de mediana & \good{Cumple} \\
+    R-1 Consolidación & $\leq$ 5 min & 5,52 ms con 450.112 filas & \good{Cumple} \\
+    R-2 Ingesta & $\leq$ 60 s & 9,87 ms de mediana & \good{Cumple} \\
     R-3 Volumen 5 años & sin degradar R-1 & 450.112 filas, 71,0 MB & \good{Cumple} \\
     E-1 Exactitud & 0 disc., $\leq$ 1 CLP & 0 líneas; 0,0044 CLP & \good{Cumple} \\
     E-2 Integridad & 0 duplicados & 0 antes y después & \good{Cumple} \\
     S-2 RBAC & mínimo privilegio & 8/8 controles & \good{Cumple} \\
     S-4 Auditoría & 100\,\% eventos & 4/4 acciones & \good{Cumple} \\
-    M-1 Cobertura & 70 / 90\,\% & 91,33 / 92,38\,\% & \good{Cumple} \\
+    M-1 Cobertura & 70 / 90\,\% & 91,41 / 92,38\,\% & \good{Cumple} \\
     \bottomrule
   \end{tabular}
   \vspace{1.5mm}
 
-  {\tiny 37 pruebas. Parciales o pendientes: D-1, D-2, D-3, S-1, S-3, U-1, U-2, M-2 (ver \code{docs/rnf.md}).}
+  {\tiny 47 pruebas. Parciales o pendientes: D-1, D-2, D-3, S-1, S-3, U-1, U-2, M-2 (ver \code{docs/rnf.md}).}
   \vspace{1mm}
 
   \begin{block}{Lectura}
@@ -417,7 +419,7 @@
 \begin{frame}{Cierre}
   % [E3] tiempo objetivo: 15 s
   \begin{block}{Construido y medido}
-    RF-1 a RF-10 \textbullet{} 37 pruebas \textbullet{} RNF críticos medidos \textbullet{} 2 ciencias con resultados.
+    RF-1 a RF-10, RF-13 y RF-14 \textbullet{} 47 pruebas \textbullet{} RNF críticos medidos \textbullet{} 2 ciencias con resultados.
   \end{block}
   \begin{block}{Comprometido}
     Resultados de validación \textbullet{} informe E4 \textbullet{} defensa E5.
@@ -453,8 +455,30 @@
     RF-10 & Auditoría & Implementado \\
     RF-11 & Exportación & Pendiente \\
     RF-12 & Gastos marítimos y portal & Excluido \\
+    RF-13 & Administración de roles & Implementado \\
+    RF-14 & Rectificación de consolidación & Implementado \\
     \bottomrule
   \end{tabular}
+\end{frame}
+
+\begin{frame}{Respaldo · Administración y rectificación}
+  \small
+  \begin{block}{RF-13 · Administración de roles}
+    \begin{itemize}
+      \item Solo el administrador TI cambia roles; una cuenta sin rol operativo recibe 403.
+      \item El cambio rige en la siguiente solicitud, con la sesión abierta.
+      \item No hay autoasignación de rol ni se puede quitar el último administrador.
+      \item Auditoría con actor, cuenta, valor anterior, valor nuevo y motivo.
+    \end{itemize}
+  \end{block}
+  \begin{block}{RF-14 · Rectificación de una consolidación aprobada}
+    \begin{itemize}
+      \item La versión aprobada queda inmutable; la rectificación crea \(v_{n+1}\) en borrador.
+      \item La versión anterior sigue vigente hasta que se aprueba el reemplazo, en una transacción.
+      \item Solo una versión aprobada vigente y una rectificación abierta por cliente/período.
+      \item El borrador desactualizado no se envía hasta regenerarlo.
+    \end{itemize}
+  \end{block}
 \end{frame}
 
 \begin{frame}{Respaldo · RNF medidos y pendientes}
@@ -463,13 +487,13 @@
     \column{0.50\textwidth}
       \textbf{Medidos}
       \begin{itemize}
-        \item R-1: 5,1 ms (450k filas)
-        \item R-2: 9,52 ms
+        \item R-1: 5,52 ms (450k filas)
+        \item R-2: 9,87 ms
         \item R-3: 450.112 filas, 71,0 MB
         \item E-1: 0 líneas fuera de tolerancia
         \item E-2: 0 duplicados
         \item S-2: 8/8; S-4: 4/4
-        \item M-1: 91,33 / 92,38 \%
+        \item M-1: 91,41 / 92,38 \%
       \end{itemize}
     \column{0.46\textwidth}
       \textbf{Parciales o pendientes}

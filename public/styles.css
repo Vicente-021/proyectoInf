@@ -235,6 +235,9 @@ dialog input, dialog textarea, dialog select {
   background: #fff;
 }
 dialog textarea { min-height: 80px; resize: vertical; }
+.check-row { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #333; margin: 14px 0 4px; }
+.check-row input { width: auto; }
+#admin-users table td { vertical-align: middle; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
 
 /* ---------- Aviso ---------- */

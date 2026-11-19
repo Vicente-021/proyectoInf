@@ -44,7 +44,7 @@ export function seedDatabase(db, data) {
     VALUES (?, ?, ?, ?, ?, ?, ?)
   `);
   const insertUser = db.prepare(
-    'INSERT INTO users (id, name, role, password_hash) VALUES (?, ?, ?, ?)'
+    'INSERT INTO users (id, name, role, is_admin, password_hash) VALUES (?, ?, ?, ?, ?)'
   );
   const insertAudit = db.prepare(`
     INSERT INTO audit_events (actor, role, action, entity, entity_id, detail)
@@ -300,8 +300,10 @@ export function seedDatabase(db, data) {
     }
 
     // Usuarios de demostración (contraseña: demo). No usar en producción.
-    insertUser.run('u-analista', 'Analista Marine', 'analista', demoHash);
-    insertUser.run('u-aprobador', 'Jefe Comercial Marine', 'aprobador', demoHash);
+    insertUser.run('u-analista', 'Analista Marine', 'analista', 0, demoHash);
+    insertUser.run('u-aprobador', 'Jefe Comercial Marine', 'aprobador', 0, demoHash);
+    insertUser.run('u-admin', 'Administrador TI', null, 1, demoHash);
+    insertUser.run('u-sinrol', 'Usuario sin rol', null, 0, demoHash);
 
     insertAudit.run(
       'system',
