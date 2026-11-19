@@ -289,7 +289,9 @@ function alertAction(alert) {
 function renderResumen() {
   if (!state.summary) return;
   const summary = state.summary;
-  const critical = openAlerts().filter((alert) => alert.severity === 'critical');
+  const openList = openAlerts();
+  const critical = openList.filter((alert) => alert.severity === 'critical');
+  const warnings = openList.filter((alert) => alert.severity === 'warning').length;
 
   $('resumen-period').textContent = state.period;
   $('kpi-clients').textContent = fmtInt(summary.clients);
@@ -297,14 +299,16 @@ function renderResumen() {
   $('kpi-alerts').textContent = fmtInt(summary.openAlerts);
   $('kpi-alerts').style.color = summary.criticalAlerts > 0 ? 'var(--red)' : 'var(--green)';
   $('kpi-alerts-sub').textContent = summary.criticalAlerts > 0
-    ? `${summary.criticalAlerts} crítica(s)`
-    : 'Sin críticas abiertas';
+    ? `${summary.criticalAlerts} crítica(s) · ${warnings} advertencia(s)`
+    : warnings > 0
+      ? `${warnings} advertencia(s)`
+      : 'Sin críticas abiertas';
   $('kpi-clp').textContent = fmtClp(summary.estimatedClp);
 
   if (critical.length) {
     $('resumen-alert').innerHTML = `
       <div class="alert-banner">
-        <span><b>${critical.length} alerta(s) crítica(s):</b> ${esc(critical[0].message)}</span>
+        <span><b>${summary.openAlerts} alertas abiertas</b> · ${critical.length} crítica(s): ${esc(critical[0].message)}${critical.length > 1 ? ` (+${critical.length - 1} crítica(s) más)` : ''}</span>
         <button class="link-btn" type="button" data-go="alertas">Ver alertas</button>
       </div>`;
   } else if (summary.openAlerts > 0) {
